@@ -31,7 +31,7 @@ class _Defaults:
     # Time in seconds for the landing descent (safety timeout)
     LANDING_TIME = 2.0
     # Descent rate in m/s for gradual landing (0.3 = 30cm per second)
-    DESCENT_RATE = 0.3
+    DESCENT_RATE = 0.2
 
     # === DEBUG & SAFETY ===
     # Set True to disable motors (sensors and logging still work)
@@ -55,14 +55,14 @@ class _Defaults:
     # Controls how the drone corrects its X/Y position error.
     # Kp = proportional (how hard to push back), Ki = integral (fix steady-state drift),
     # Kd = derivative (dampen oscillation).
-    POSITION_KP = 1.0
+    POSITION_KP = 0.8
     POSITION_KI = 0.03
-    POSITION_KD = 0.0
+    POSITION_KD = 0.05
 
     # === PID CONTROLLER — VELOCITY LOOP ===
     # Second PID layer that dampens velocity to prevent overshooting.
-    VELOCITY_KP = 0.7
-    VELOCITY_KI = 0.01
+    VELOCITY_KP = 0.3
+    VELOCITY_KI = 0.0
     VELOCITY_KD = 0.0
 
     # === POSITION HOLD PARAMETERS ===
@@ -86,8 +86,8 @@ class _Defaults:
     OPTICAL_FLOW_SCALE = 4.4
     # True = velocity calculation depends on altitude, False = fixed scaling
     USE_HEIGHT_SCALING = True
-    # Velocity smoothing filter strength (0.0 = raw, 1.0 = maximum smoothing)
-    VELOCITY_SMOOTHING_ALPHA = 0.85
+    # Velocity smoothing filter strength (1.0 = raw, 0.0 = maximum smoothing)
+    VELOCITY_SMOOTHING_ALPHA = 0.3
     # Enable smooth altitude climb during takeoff (vs. instant target height)
     ENABLE_TAKEOFF_RAMP = False
 
