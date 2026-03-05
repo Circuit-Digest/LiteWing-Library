@@ -471,3 +471,168 @@ def live_position_plot(drone, max_points=500, update_ms=100):
     finally:
         collector.stop()
         drone.disconnect()
+
+
+# ─────────────────────────────────────────────────────────────────────
+#  NON-BLOCKING (BACKGROUND) PLOT FUNCTIONS
+# ─────────────────────────────────────────────────────────────────────
+
+class BackgroundPlot:
+    """
+    A live plot running in a separate process — does NOT block your script.
+
+    Uses ``subprocess.Popen`` to launch a dedicated plot runner, avoiding
+    the Windows multiprocessing ``spawn`` re-execution issue. Sensor data
+    is streamed to the subprocess via stdin as JSON lines.
+
+    Created by the ``start_live_*`` functions. Call ``.stop()`` when done.
+
+    Example::
+
+        plot = start_live_dashboard(drone)
+        # ... fly the drone normally ...
+        plot.stop()
+    """
+
+    def __init__(self, drone, plot_type, max_points=200, update_ms=100):
+        self._drone = drone
+        self._plot_type = plot_type
+        self._max_points = max_points
+        self._update_ms = update_ms
+        self._stop = False
+        self._feeder_thread = None
+        self._process = None
+
+    def start(self):
+        """Launch the feeder thread and plot subprocess."""
+        import sys
+        import subprocess
+
+        # Launch plot runner as a completely separate process
+        self._process = subprocess.Popen(
+            [sys.executable, "-m", "litewing._plot_runner",
+             self._plot_type, str(self._max_points), str(self._update_ms)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Feeder thread: reads sensors in main process, writes JSON to stdin
+        self._feeder_thread = threading.Thread(
+            target=self._feed_loop, daemon=True
+        )
+        self._feeder_thread.start()
+        return self
+
+    def stop(self):
+        """Stop the plot and clean up."""
+        self._stop = True
+        if self._process:
+            try:
+                self._process.stdin.close()
+            except Exception:
+                pass
+            try:
+                self._process.wait(timeout=3)
+            except Exception:
+                try:
+                    self._process.terminate()
+                except Exception:
+                    pass
+
+    @property
+    def is_running(self):
+        """True if the plot process is still alive."""
+        return self._process is not None and self._process.poll() is None
+
+    def _feed_loop(self):
+        """Continuously read sensors and write JSON lines to subprocess stdin."""
+        import json
+        interval = self._update_ms / 1000.0
+        while not self._stop:
+            try:
+                s = self._drone.read_sensors()
+                data = {
+                    "height": s.height,
+                    "range_height": s.range_height,
+                    "roll": s.roll,
+                    "pitch": s.pitch,
+                    "yaw": s.yaw,
+                    "vx": s.vx,
+                    "vy": s.vy,
+                    "battery": s.battery,
+                    "gyro_x": s.gyro_x,
+                    "gyro_y": s.gyro_y,
+                    "gyro_z": s.gyro_z,
+                    "x": s.x,
+                    "y": s.y,
+                    "time": time.time(),
+                }
+                line = json.dumps(data) + "\n"
+                self._process.stdin.write(line.encode("utf-8"))
+                self._process.stdin.flush()
+            except (BrokenPipeError, OSError, ValueError):
+                break  # Subprocess closed — stop feeding
+            except Exception:
+                pass
+            time.sleep(interval)
+
+
+# ── Public non-blocking launchers ────────────────────────────────────
+
+def start_live_dashboard(drone, max_points=200, update_ms=100):
+    """
+    Start a full sensor dashboard in the background (non-blocking).
+
+    Returns:
+        BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+
+    Example::
+
+        plot = start_live_dashboard(drone)
+        drone.arm()
+        drone.takeoff()
+        drone.hover(5)
+        drone.land()
+        plot.stop()
+    """
+    _ensure_connected(drone)
+    bp = BackgroundPlot(drone, "dashboard", max_points, update_ms)
+    return bp.start()
+
+
+def start_live_height_plot(drone, max_points=200, update_ms=100):
+    """
+    Start a live height plot in the background (non-blocking).
+
+    Returns:
+        BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+    """
+    _ensure_connected(drone)
+    bp = BackgroundPlot(drone, "height", max_points, update_ms)
+    return bp.start()
+
+
+def start_live_imu_plot(drone, max_points=200, update_ms=100):
+    """
+    Start a live IMU plot in the background (non-blocking).
+
+    Returns:
+        BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+    """
+    _ensure_connected(drone)
+    bp = BackgroundPlot(drone, "imu", max_points, update_ms)
+    return bp.start()
+
+
+def start_live_position_plot(drone, max_points=500, update_ms=100):
+    """
+    Start a live XY position trail plot in the background (non-blocking).
+
+    Returns:
+        BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+    """
+    _ensure_connected(drone)
+    bp = BackgroundPlot(drone, "position", max_points, update_ms)
+    return bp.start()
+

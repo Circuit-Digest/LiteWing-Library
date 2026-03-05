@@ -316,6 +316,12 @@ class LiteWing:
         """
         from ._connection import stop_logging_configs
 
+        # Stop background plot if running
+        try:
+            self.stop_plot()
+        except Exception:
+            pass
+
         # Stop motors if flying
         if self._flight_active:
             self._flight_active = False
@@ -1189,6 +1195,70 @@ class LiteWing:
     def stop_logging(self):
         """Stop recording and close the CSV file."""
         self._flight_logger.stop(logger=self._logger_fn)
+
+    # === Live Plots (Non-Blocking) ===
+
+    def start_dashboard(self, max_points=200, update_ms=100):
+        """
+        Start a full sensor dashboard in the background (non-blocking).
+
+        The plot runs in a separate process — your script keeps running!
+
+        Returns:
+            BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+
+        Example::
+
+            plot = drone.start_dashboard()
+            drone.arm()
+            drone.takeoff()
+            drone.hover(5)
+            drone.land()
+            plot.stop()
+        """
+        from .gui import start_live_dashboard
+        self._background_plot = start_live_dashboard(self, max_points, update_ms)
+        return self._background_plot
+
+    def start_height_plot(self, max_points=200, update_ms=100):
+        """
+        Start a live height plot in the background (non-blocking).
+
+        Returns:
+            BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+        """
+        from .gui import start_live_height_plot
+        self._background_plot = start_live_height_plot(self, max_points, update_ms)
+        return self._background_plot
+
+    def start_imu_plot(self, max_points=200, update_ms=100):
+        """
+        Start a live IMU plot in the background (non-blocking).
+
+        Returns:
+            BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+        """
+        from .gui import start_live_imu_plot
+        self._background_plot = start_live_imu_plot(self, max_points, update_ms)
+        return self._background_plot
+
+    def start_position_plot(self, max_points=500, update_ms=100):
+        """
+        Start a live XY position trail plot in the background (non-blocking).
+
+        Returns:
+            BackgroundPlot: Handle with ``.stop()`` and ``.is_running``.
+        """
+        from .gui import start_live_position_plot
+        self._background_plot = start_live_position_plot(self, max_points, update_ms)
+        return self._background_plot
+
+    def stop_plot(self):
+        """Stop the currently running background plot, if any."""
+        plot = getattr(self, '_background_plot', None)
+        if plot is not None:
+            plot.stop()
+            self._background_plot = None
 
     # === Internal Callbacks (hidden from learners) ===
 
