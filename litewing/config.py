@@ -40,8 +40,10 @@ class _Defaults:
     ENABLE_HEIGHT_SENSOR_SAFETY = False
     # Minimum height change expected during takeoff (meters)
     HEIGHT_SENSOR_MIN_CHANGE = 0.005
-    # Low battery warning threshold in volts
-    LOW_BATTERY_THRESHOLD = 2.9
+    # Low battery warning threshold in volts (LEDs blink red)
+    LOW_BATTERY_THRESHOLD = 3.3
+    # Critical battery threshold in volts (auto-land triggered)
+    CRITICAL_BATTERY_THRESHOLD = 2.8
     # Max allowed time between sensor packets before declaring timeout (seconds)
     DATA_TIMEOUT_THRESHOLD = 0.2
 

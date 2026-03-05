@@ -7,7 +7,7 @@ This runs in a background thread and handles the control loop.
 
 import time
 from .config import defaults
-from ._safety import check_link_safety
+from ._safety import check_link_safety, check_battery_safe
 from ._connection import (
     setup_sensor_logging, apply_firmware_parameters, stop_logging_configs
 )
@@ -286,12 +286,41 @@ def _hover_loop(drone, cf, has_pos_hold, duration):
     """Run a simple timed hover with position hold."""
     hover_start = time.time()
 
+    _low_bat_warned = False
+
     while (time.time() - hover_start < duration and drone._flight_active):
         if not check_link_safety(cf, drone._sensors.sensor_data_ready,
                                 drone._sensors.last_sensor_heartbeat,
                                 drone.debug_mode, drone._logger_fn):
             drone._flight_active = False
             break
+
+        # Battery safety check
+        voltage = drone._sensors.battery_voltage
+        if voltage > 0:
+            if voltage < defaults.CRITICAL_BATTERY_THRESHOLD:
+                if drone._logger_fn:
+                    drone._logger_fn(
+                        f"CRITICAL: Battery {voltage:.2f}V! Auto-landing!"
+                    )
+                try:
+                    drone._leds.set_color(255, 0, 0)
+                except Exception:
+                    pass
+                drone._flight_active = False
+                break
+            elif voltage < defaults.LOW_BATTERY_THRESHOLD and not _low_bat_warned:
+                _low_bat_warned = True
+                if drone._logger_fn:
+                    drone._logger_fn(
+                        f"WARNING: Low battery ({voltage:.2f}V)! "
+                        f"Land soon and charge/replace battery."
+                    )
+                try:
+                    drone._leds.set_color(255, 0, 0)
+                    drone._leds.blink(200, 200)
+                except Exception:
+                    pass
 
         # Periodic position reset
         drone._position_engine.periodic_reset_check()

@@ -772,7 +772,35 @@ class LiteWing:
 
         cf = self._cf_instance
         start = time.time()
+        _low_bat_warned = False
         while (time.time() - start < seconds and self._flight_active):
+            # Battery safety check
+            voltage = self._sensors.battery_voltage
+            if voltage > 0:
+                if voltage < defaults.CRITICAL_BATTERY_THRESHOLD:
+                    if self._logger_fn:
+                        self._logger_fn(
+                            f"CRITICAL: Battery {voltage:.2f}V! Auto-landing!"
+                        )
+                    try:
+                        self._leds.set_color(255, 0, 0)
+                    except Exception:
+                        pass
+                    break
+                elif (voltage < defaults.LOW_BATTERY_THRESHOLD
+                      and not _low_bat_warned):
+                    _low_bat_warned = True
+                    if self._logger_fn:
+                        self._logger_fn(
+                            f"WARNING: Low battery ({voltage:.2f}V)! "
+                            f"Land soon and charge/replace battery."
+                        )
+                    try:
+                        self._leds.set_color(255, 0, 0)
+                        self._leds.blink(200, 200)
+                    except Exception:
+                        pass
+
             if not self.debug_mode:
                 if self._sensors.sensor_data_ready:
                     mvx, mvy = self._position_hold.calculate_corrections(
