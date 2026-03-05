@@ -56,12 +56,12 @@ class _Defaults:
     # Kp = proportional (how hard to push back), Ki = integral (fix steady-state drift),
     # Kd = derivative (dampen oscillation).
     POSITION_KP = 0.8
-    POSITION_KI = 0.03
+    POSITION_KI = 0.04
     POSITION_KD = 0.05
 
     # === PID CONTROLLER — VELOCITY LOOP ===
     # Second PID layer that dampens velocity to prevent overshooting.
-    VELOCITY_KP = 0.3
+    VELOCITY_KP = 0.5
     VELOCITY_KI = 0.0
     VELOCITY_KD = 0.0
 
