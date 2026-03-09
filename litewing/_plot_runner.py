@@ -268,7 +268,8 @@ def run_plot(plot_type, max_points, update_ms):
         current_dot, = ax.plot([], [], 'o', color=COLORS["green"], markersize=10, zorder=5)
         start_dot, = ax.plot([], [], 's', color=COLORS["red"], markersize=10,
                              label="Start", zorder=5)
-        ax.set_xlabel("X position (meters)"); ax.set_ylabel("Y position (meters)")
+        ax.set_xlabel("← Right / Left → (meters)")
+        ax.set_ylabel("← Backward / Forward → (meters)")
         ax.legend(loc="upper right", fontsize=9); ax.grid(True)
         coord_text = ax.text(
             0.02, 0.98, "", transform=ax.transAxes, fontsize=10,
@@ -281,15 +282,18 @@ def run_plot(plot_type, max_points, update_ms):
             if _stdin_closed[0] and len(timestamps) == 0:
                 plt.close("all")
                 return
-            x = [-v for v in buf["x"]]
-            y = list(buf["y"])
-            if len(x) < 2:
+            # Map drone coordinates to Screen/Map view:
+            # Screen Y (vertical) = Drone X (Forward/Backward)
+            # Screen X (horizontal) = -Drone Y (negate so +Left moves dot Left)
+            x_screen = [-v for v in buf["y"]]
+            y_screen = list(buf["x"])
+            if len(x_screen) < 2:
                 return
-            trail_line.set_data(x, y)
-            current_dot.set_data([x[-1]], [y[-1]])
-            start_dot.set_data([x[0]], [y[0]])
-            x_min, x_max = min(x), max(x)
-            y_min, y_max = min(y), max(y)
+            trail_line.set_data(x_screen, y_screen)
+            current_dot.set_data([x_screen[-1]], [y_screen[-1]])
+            start_dot.set_data([x_screen[0]], [y_screen[0]])
+            x_min, x_max = min(x_screen), max(x_screen)
+            y_min, y_max = min(y_screen), max(y_screen)
             x_range = x_max - x_min
             y_range = y_max - y_min
             half = max(x_range, y_range, 0.1) / 2 + 0.05
@@ -297,7 +301,7 @@ def run_plot(plot_type, max_points, update_ms):
             cy = (y_max + y_min) / 2
             ax.set_xlim(cx - half, cx + half)
             ax.set_ylim(cy - half, cy + half)
-            coord_text.set_text(f"X: {x[-1]:.3f} m\nY: {y[-1]:.3f} m")
+            coord_text.set_text(f"Forward (X): {buf['x'][-1]:.3f} m\nLeft (Y): {buf['y'][-1]:.3f} m")
     else:
         print(f"Unknown plot type: {plot_type}", file=sys.stderr)
         sys.exit(1)

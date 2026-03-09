@@ -418,8 +418,8 @@ def live_position_plot(drone, max_points=500, update_ms=100):
     start_dot, = ax.plot([], [], 's', color=COLORS["red"], markersize=10,
                          label="Start", zorder=5)
 
-    ax.set_xlabel("X position (meters)")
-    ax.set_ylabel("Y position (meters)")
+    ax.set_xlabel("← Right / Left → (meters)")
+    ax.set_ylabel("← Backward / Forward → (meters)")
     ax.legend(loc="upper right", fontsize=9)
     ax.grid(True)
 
@@ -432,25 +432,26 @@ def live_position_plot(drone, max_points=500, update_ms=100):
     )
 
     def update(frame):
-        # Negate X to match real-world direction (optical flow sensor convention)
-        x = [-v for v in collector.x]
-        y = list(collector.y)
-        if len(x) < 2:
+        # Map drone coordinates to Screen/Map view:
+        # Screen Y (vertical) = Drone X (Forward/Backward)
+        # Screen X (horizontal) = -Drone Y (negate so +Left moves dot Left)
+        x_screen = [-v for v in collector.y]
+        y_screen = list(collector.x)
+        if len(x_screen) < 2:
             return
 
         # Trail
-        trail_line.set_data(x, y)
+        trail_line.set_data(x_screen, y_screen)
 
         # Current position
-        current_dot.set_data([x[-1]], [y[-1]])
+        current_dot.set_data([x_screen[-1]], [y_screen[-1]])
 
         # Start position
-        start_dot.set_data([x[0]], [y[0]])
+        start_dot.set_data([x_screen[0]], [y_screen[0]])
 
-        # Equal scaling — compute square bounds manually to avoid
-        # matplotlib 'Ignoring fixed y limits' warning
-        x_min, x_max = min(x), max(x)
-        y_min, y_max = min(y), max(y)
+        # Equal scaling — compute square bounds manually
+        x_min, x_max = min(x_screen), max(x_screen)
+        y_min, y_max = min(y_screen), max(y_screen)
         x_range = x_max - x_min
         y_range = y_max - y_min
         half = max(x_range, y_range, 0.1) / 2 + 0.05
@@ -459,8 +460,8 @@ def live_position_plot(drone, max_points=500, update_ms=100):
         ax.set_xlim(cx - half, cx + half)
         ax.set_ylim(cy - half, cy + half)
 
-        # Coordinate text
-        coord_text.set_text(f"X: {x[-1]:.3f} m\nY: {y[-1]:.3f} m")
+        # Coordinate text (Still show logical Drone X/Y for clarity)
+        coord_text.set_text(f"Forward (X): {collector.x[-1]:.3f} m\nLeft (Y): {collector.y[-1]:.3f} m")
 
     ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
 

@@ -139,8 +139,8 @@ def run_flight_sequence(drone, maneuver_fn=None):
                     else:
                         mvx, mvy = 0.0, 0.0
 
-                    total_vx = drone.hover_trim_pitch + mvy
-                    total_vy = drone.hover_trim_roll + mvx
+                    total_vx = drone.hover_trim_pitch + mvx
+                    total_vy = drone.hover_trim_roll + mvy
 
                     # Takeoff ramp
                     if drone.enable_takeoff_ramp:
@@ -189,8 +189,8 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 else:
                     mvx, mvy = 0.0, 0.0
 
-                total_vx = drone.hover_trim_pitch + mvy
-                total_vy = drone.hover_trim_roll + mvx
+                total_vx = drone.hover_trim_pitch + mvx
+                total_vy = drone.hover_trim_roll + mvy
 
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(
@@ -237,8 +237,8 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 else:
                     mvx, mvy = 0.0, 0.0
 
-                total_vx = drone.hover_trim_pitch + mvy
-                total_vy = drone.hover_trim_roll + mvx
+                total_vx = drone.hover_trim_pitch + mvx
+                total_vy = drone.hover_trim_roll + mvy
 
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(
@@ -334,8 +334,8 @@ def _hover_loop(drone, cf, has_pos_hold, duration):
         else:
             mvx, mvy = 0.0, 0.0
 
-        total_vx = drone.hover_trim_pitch + mvy
-        total_vy = drone.hover_trim_roll + mvx
+        total_vx = drone.hover_trim_pitch + mvx
+        total_vy = drone.hover_trim_roll + mvy
 
         if not drone.debug_mode:
             cf.commander.send_hover_setpoint(
@@ -412,8 +412,8 @@ def run_waypoint_maneuver(drone, cf, has_pos_hold, waypoints,
             else:
                 mvx, mvy = 0.0, 0.0
 
-            total_vx = drone.hover_trim_pitch + mvy
-            total_vy = drone.hover_trim_roll + mvx
+            total_vx = drone.hover_trim_pitch + mvx
+            total_vy = drone.hover_trim_roll + mvy
 
             if not drone.debug_mode:
                 cf.commander.send_hover_setpoint(
@@ -435,8 +435,8 @@ def run_waypoint_maneuver(drone, cf, has_pos_hold, waypoints,
                     )
                 else:
                     mvx, mvy = 0.0, 0.0
-                total_vx = drone.hover_trim_pitch + mvy
-                total_vy = drone.hover_trim_roll + mvx
+                total_vx = drone.hover_trim_pitch + mvx
+                total_vy = drone.hover_trim_roll + mvy
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(
                         total_vx, total_vy, 0, drone.target_height
@@ -464,5 +464,5 @@ def _log_csv_row(drone):
         gyro_y=drone._sensors.gyro_y,
         gyro_z=drone._sensors.gyro_z,
         flight_phase=drone._flight_phase,
-        target_height=drone.target_height,
+        target_height=drone._cmd_height,
     )
