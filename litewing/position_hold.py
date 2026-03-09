@@ -59,7 +59,7 @@ class PositionHoldController:
         self.target_y = y
 
     def calculate_corrections(self, current_x, current_y, current_vx, current_vy,
-                              current_height, sensor_ready, dt=None,
+                              current_height, sensor_ready, current_yaw=0.0, dt=None,
                               max_correction=None,
                               approach_damping_distance=0.1,
                               approach_damping_velocity=0.05,
@@ -129,6 +129,15 @@ class PositionHoldController:
         total_vx = max(-max_correction, min(max_correction, total_vx))
         total_vy = max(-max_correction, min(max_correction, total_vy))
 
-        self.correction_vx = total_vx
-        self.correction_vy = total_vy
-        return total_vx, total_vy
+        # Rotate the global velocity corrections back to the drone's body frame
+        import math
+        yaw_rad = math.radians(current_yaw)
+        cos_y = math.cos(yaw_rad)
+        sin_y = math.sin(yaw_rad)
+
+        body_vx = total_vx * cos_y + total_vy * sin_y
+        body_vy = -total_vx * sin_y + total_vy * cos_y
+
+        self.correction_vx = body_vx
+        self.correction_vy = body_vy
+        return body_vx, body_vy

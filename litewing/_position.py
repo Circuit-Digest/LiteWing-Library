@@ -119,7 +119,7 @@ class PositionEngine:
             return True
         return False
 
-    def update_from_sensor(self, delta_x, delta_y, altitude, cfg=None):
+    def update_from_sensor(self, delta_x, delta_y, altitude, yaw=0.0, cfg=None):
         """
         Process new sensor data — calculates velocity and integrates position.
         Called by the sensor callback.
@@ -128,6 +128,7 @@ class PositionEngine:
             delta_x: Raw optical flow delta X.
             delta_y: Raw optical flow delta Y.
             altitude: Current height in meters.
+            yaw: Current yaw angle in degrees.
             cfg: Config defaults override.
         """
         if cfg is None:
@@ -136,13 +137,22 @@ class PositionEngine:
         self.delta_x = delta_x
         self.delta_y = delta_y
 
-        # Calculate raw velocities
-        raw_vx = self.calculate_velocity(delta_x, altitude, cfg)
-        raw_vy = self.calculate_velocity(delta_y, altitude, cfg)
+        # Calculate raw body velocities
+        raw_body_vx = self.calculate_velocity(delta_x, altitude, cfg)
+        raw_body_vy = self.calculate_velocity(delta_y, altitude, cfg)
 
-        # Apply smoothing
-        self.vx = self._smooth_velocity(raw_vx, self._vx_history, cfg)
-        self.vy = self._smooth_velocity(raw_vy, self._vy_history, cfg)
+        # Rotate body velocities to global frame using yaw
+        import math
+        yaw_rad = math.radians(yaw)
+        cos_y = math.cos(yaw_rad)
+        sin_y = math.sin(yaw_rad)
+
+        raw_global_vx = raw_body_vx * cos_y - raw_body_vy * sin_y
+        raw_global_vy = raw_body_vx * sin_y + raw_body_vy * cos_y
+
+        # Apply smoothing to global velocities
+        self.vx = self._smooth_velocity(raw_global_vx, self._vx_history, cfg)
+        self.vy = self._smooth_velocity(raw_global_vy, self._vy_history, cfg)
 
         # Integrate position
         current_time = time.time()

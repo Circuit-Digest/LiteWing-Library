@@ -129,7 +129,7 @@ def run_manual_control(drone):
                         mvx, mvy = drone._position_hold.calculate_corrections(
                             drone._position_engine.x, drone._position_engine.y,
                             drone._position_engine.vx, drone._position_engine.vy,
-                            drone._sensors.height, True
+                            drone._sensors.height, True, current_yaw=drone._sensors.yaw
                         )
                     else:
                         mvx, mvy = 0.0, 0.0
