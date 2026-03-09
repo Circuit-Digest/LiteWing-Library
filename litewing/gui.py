@@ -166,11 +166,15 @@ def live_dashboard(drone, max_points=200, update_ms=100):
     collector = _DataCollector(drone, max_points=max_points, interval_ms=update_ms)
     collector.start()
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 7))
+    fig = plt.figure(figsize=(15, 8))
     fig.suptitle("LiteWing — Live Sensor Dashboard", color=COLORS["cyan"])
-    fig.subplots_adjust(hspace=0.4, wspace=0.3)
+    gs = fig.add_gridspec(2, 3, wspace=0.3, hspace=0.4)
 
-    ax_h, ax_imu, ax_vel, ax_bat = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+    ax_h = fig.add_subplot(gs[0, 0])
+    ax_imu = fig.add_subplot(gs[0, 1])
+    ax_vel = fig.add_subplot(gs[1, 0])
+    ax_bat = fig.add_subplot(gs[1, 1])
+    ax_pos = fig.add_subplot(gs[:, 2])
 
     # Height subplot
     line_hf, = ax_h.plot([], [], color=COLORS["cyan"], label="Filtered")
@@ -204,6 +208,23 @@ def live_dashboard(drone, max_points=200, update_ms=100):
     ax_bat.set_ylabel("volts")
     ax_bat.set_xlabel("time (s)")
     ax_bat.grid(True)
+
+    # Position subplot
+    trail_line, = ax_pos.plot([], [], color=COLORS["cyan"], linewidth=1.5, alpha=0.6)
+    current_dot, = ax_pos.plot([], [], 'o', color=COLORS["green"], markersize=10, zorder=5)
+    start_dot, = ax_pos.plot([], [], 's', color=COLORS["red"], markersize=10,
+                         label="Start", zorder=5)
+    ax_pos.set_title("Position Trail")
+    ax_pos.set_xlabel("← Right / Left → (m)")
+    ax_pos.set_ylabel("← Backward / Forward → (m)")
+    ax_pos.legend(loc="upper right", fontsize=8)
+    ax_pos.grid(True)
+    coord_text = ax_pos.text(
+        0.02, 0.98, "", transform=ax_pos.transAxes,
+        fontsize=9, verticalalignment='top',
+        color=COLORS["green"],
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#2a2a3d', alpha=0.8)
+    )
 
     def update(frame):
         t = list(collector.timestamps)
@@ -245,6 +266,26 @@ def live_dashboard(drone, max_points=200, update_ms=100):
             bat_f = [v for v in bat if v > 0]
             if bat_f:
                 ax_bat.set_ylim(min(bat_f) - 0.1, max(bat_f) + 0.1)
+
+        # Position
+        x_screen = [-v for v in collector.y]
+        y_screen = list(collector.x)
+        if len(x_screen) >= 2:
+            trail_line.set_data(x_screen, y_screen)
+            current_dot.set_data([x_screen[-1]], [y_screen[-1]])
+            start_dot.set_data([x_screen[0]], [y_screen[0]])
+            
+            x_min, x_max = min(x_screen), max(x_screen)
+            y_min, y_max = min(y_screen), max(y_screen)
+            x_range = x_max - x_min
+            y_range = y_max - y_min
+            half = max(x_range, y_range, 0.1) / 2 + 0.05
+            cx = (x_max + x_min) / 2
+            cy = (y_max + y_min) / 2
+            ax_pos.set_xlim(cx - half, cx + half)
+            ax_pos.set_ylim(cy - half, cy + half)
+            
+            coord_text.set_text(f"Forward (X): {collector.x[-1]:.3f} m\nLeft (Y): {collector.y[-1]:.3f} m")
 
     ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
 
@@ -525,8 +566,18 @@ class BackgroundPlot:
         self._feeder_thread.start()
         return self
 
-    def stop(self):
-        """Stop the plot and clean up."""
+    def stop(self, save_path=None):
+        """Stop the plot and clean up. Optionally save the plot before closing."""
+        if save_path and self._process:
+            import json
+            try:
+                line = json.dumps({"command": "save", "path": save_path}) + "\n"
+                self._process.stdin.write(line.encode("utf-8"))
+                self._process.stdin.flush()
+                time.sleep(0.5)  # give it a moment to process the command
+            except Exception:
+                pass
+
         self._stop = True
         if self._process:
             try:

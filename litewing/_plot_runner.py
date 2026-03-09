@@ -67,6 +67,7 @@ def run_plot(plot_type, max_points, update_ms):
     ]}
     start_time = [None]
     _stdin_closed = [False]
+    _save_paths = []
 
     def _drain_stdin():
         """Non-blocking read of all available JSON lines from stdin."""
@@ -119,6 +120,11 @@ def run_plot(plot_type, max_points, update_ms):
         for line in lines:
             try:
                 data = json.loads(line)
+                if data.get("command") == "save":
+                    if "path" in data:
+                        _save_paths.append(data["path"])
+                    continue
+                
                 if start_time[0] is None:
                     start_time[0] = data["time"]
                 timestamps.append(data["time"] - start_time[0])
@@ -130,10 +136,14 @@ def run_plot(plot_type, max_points, update_ms):
     # ── Build figure ─────────────────────────────────────────
 
     if plot_type == "dashboard":
-        fig, axes = plt.subplots(2, 2, figsize=(12, 7))
+        fig = plt.figure(figsize=(15, 8))
         fig.suptitle("LiteWing — Live Dashboard (Background)", color=COLORS["cyan"])
-        fig.subplots_adjust(hspace=0.4, wspace=0.3)
-        ax_h, ax_imu, ax_vel, ax_bat = axes[0, 0], axes[0, 1], axes[1, 0], axes[1, 1]
+        gs = fig.add_gridspec(2, 3, wspace=0.3, hspace=0.4)
+        ax_h = fig.add_subplot(gs[0, 0])
+        ax_imu = fig.add_subplot(gs[0, 1])
+        ax_vel = fig.add_subplot(gs[1, 0])
+        ax_bat = fig.add_subplot(gs[1, 1])
+        ax_pos = fig.add_subplot(gs[:, 2])
 
         line_hf, = ax_h.plot([], [], color=COLORS["cyan"], label="Filtered")
         line_hr, = ax_h.plot([], [], color=COLORS["peach"], label="Raw ToF", alpha=0.7)
@@ -155,6 +165,19 @@ def run_plot(plot_type, max_points, update_ms):
         line_bat, = ax_bat.plot([], [], color=COLORS["green"], linewidth=2.5)
         ax_bat.set_title("Battery"); ax_bat.set_ylabel("volts")
         ax_bat.set_xlabel("time (s)"); ax_bat.grid(True)
+
+        trail_line, = ax_pos.plot([], [], color=COLORS["cyan"], linewidth=1.5, alpha=0.6)
+        current_dot, = ax_pos.plot([], [], 'o', color=COLORS["green"], markersize=10, zorder=5)
+        start_dot, = ax_pos.plot([], [], 's', color=COLORS["red"], markersize=10, label="Start", zorder=5)
+        ax_pos.set_title("Position Trail")
+        ax_pos.set_xlabel("← Right / Left → (m)")
+        ax_pos.set_ylabel("← Backward / Forward → (m)")
+        ax_pos.legend(loc="upper right", fontsize=8); ax_pos.grid(True)
+        coord_text = ax_pos.text(
+            0.02, 0.98, "", transform=ax_pos.transAxes, fontsize=9,
+            verticalalignment='top', color=COLORS["green"],
+            bbox=dict(boxstyle='round,pad=0.3', facecolor='#2a2a3d', alpha=0.8)
+        )
 
         def update(frame):
             _drain()
@@ -193,6 +216,24 @@ def run_plot(plot_type, max_points, update_ms):
             bat_f = [v for v in buf["battery"] if v > 0]
             if bat_f:
                 ax_bat.set_ylim(min(bat_f) - 0.1, max(bat_f) + 0.1)
+
+            # Position
+            x_screen = [-v for v in buf["y"]]
+            y_screen = list(buf["x"])
+            if len(x_screen) >= 2:
+                trail_line.set_data(x_screen, y_screen)
+                current_dot.set_data([x_screen[-1]], [y_screen[-1]])
+                start_dot.set_data([x_screen[0]], [y_screen[0]])
+                x_min, x_max = min(x_screen), max(x_screen)
+                y_min, y_max = min(y_screen), max(y_screen)
+                x_range = x_max - x_min
+                y_range = y_max - y_min
+                half = max(x_range, y_range, 0.1) / 2 + 0.05
+                cx = (x_max + x_min) / 2
+                cy = (y_max + y_min) / 2
+                ax_pos.set_xlim(cx - half, cx + half)
+                ax_pos.set_ylim(cy - half, cy + half)
+                coord_text.set_text(f"Forward (X): {buf['x'][-1]:.3f} m\nLeft (Y): {buf['y'][-1]:.3f} m")
 
     elif plot_type == "height":
         fig, ax = plt.subplots(figsize=(10, 5))
@@ -309,6 +350,11 @@ def run_plot(plot_type, max_points, update_ms):
     # Auto-close when stdin is closed (main process stopped feeding)
     def _check_stdin_closed():
         if _stdin_closed[0] and len(_pending_lines) == 0:
+            for path in _save_paths:
+                try:
+                    fig.savefig(path)
+                except Exception as e:
+                    print(f"Failed to save plot: {e}", file=sys.stderr)
             plt.close("all")
 
     timer = fig.canvas.new_timer(interval=1000)

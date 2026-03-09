@@ -71,7 +71,7 @@ drone.land()
 
 # ── Done ─────────────────────────────────────────────
 # drone.clear_leds()
-plot.stop()
+plot.stop(save_path="my_flight_plot.png")
 drone.stop_logging()
 drone.disconnect()
 print("Flight complete!")
