@@ -21,7 +21,7 @@ drone = LiteWing("192.168.43.42")
 
 # ── Configure before flight ──────────────────────────
 drone.target_height = 0.3    # Hover at 30cm (keep it low for first tests!)
-drone.hover_duration = 40.0   # Hover for 3 seconds
+drone.hover_duration = 30.0   # Hover for 3 seconds
 drone.debug_mode = False
 
 # ── Connect ──────────────────────────────────────────

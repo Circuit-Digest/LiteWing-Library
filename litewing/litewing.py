@@ -582,7 +582,7 @@ class LiteWing:
                     mvx, mvy = self._position_hold.calculate_corrections(
                         self._position_engine.x, self._position_engine.y,
                         self._position_engine.vx, self._position_engine.vy,
-                        self._sensors.height, True
+                        self._sensors.height, True, current_yaw=self._sensors.yaw
                     )
                 else:
                     mvx, mvy = 0.0, 0.0
@@ -626,7 +626,7 @@ class LiteWing:
                     mvx, mvy = self._position_hold.calculate_corrections(
                         self._position_engine.x, self._position_engine.y,
                         self._position_engine.vx, self._position_engine.vy,
-                        self._sensors.height, True
+                        self._sensors.height, True, current_yaw=self._sensors.yaw
                     )
                 else:
                     mvx, mvy = 0.0, 0.0
@@ -810,7 +810,7 @@ class LiteWing:
                     mvx, mvy = self._position_hold.calculate_corrections(
                         self._position_engine.x, self._position_engine.y,
                         self._position_engine.vx, self._position_engine.vy,
-                        self._sensors.height, True
+                        self._sensors.height, True, current_yaw=self._sensors.yaw
                     )
                 else:
                     mvx, mvy = 0.0, 0.0
@@ -1337,7 +1337,7 @@ class LiteWing:
         # Swap axes: sensor deltaY → drone forward (X), sensor deltaX → drone lateral (Y)
         # This aligns the optical flow frame with the drone's body frame at the source,
         # so all downstream values (velocity, position, corrections) are in body frame.
-        self._position_engine.update_from_sensor(delta_y, delta_x, altitude_for_calc)
+        self._position_engine.update_from_sensor(delta_y, delta_x, altitude_for_calc, yaw=self._sensors.yaw)
 
     def _battery_callback(self, timestamp, data, logconf):
         """Internal: called when new battery data arrives."""
