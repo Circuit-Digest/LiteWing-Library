@@ -85,6 +85,9 @@ class _SensorState:
         self.sensor_data_ready = False
         self.battery_data_ready = False
         self.last_sensor_heartbeat = time.time()
+        # Raw firmware optical flow values (before any axis remapping)
+        self.raw_delta_x = 0   # literal motion.deltaX from firmware
+        self.raw_delta_y = 0   # literal motion.deltaY from firmware
         # IMU state
         self.roll = 0.0
         self.pitch = 0.0

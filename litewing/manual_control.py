@@ -133,8 +133,8 @@ def run_manual_control(drone):
                         )
                     else:
                         mvx, mvy = 0.0, 0.0
-                    total_vx = drone.hover_trim_pitch + mvy
-                    total_vy = drone.hover_trim_roll + mvx
+                    total_vx = drone.hover_trim_pitch + mvx
+                    total_vy = drone.hover_trim_roll + mvy
                     cf.commander.send_hover_setpoint(
                         total_vx, total_vy, 0, drone.target_height
                     )
@@ -158,8 +158,8 @@ def run_manual_control(drone):
                     )
                 else:
                     mvx, mvy = 0.0, 0.0
-                total_vx = drone.hover_trim_pitch + mvy
-                total_vy = drone.hover_trim_roll + mvx
+                total_vx = drone.hover_trim_pitch + mvx
+                total_vy = drone.hover_trim_roll + mvy
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(
                         total_vx, total_vy, 0, drone.target_height
@@ -279,8 +279,8 @@ def run_manual_control(drone):
                     mvx, mvy = 0.0, 0.0
 
                 # Combine feedforward (joystick) + feedback (PID)
-                total_vx = drone.hover_trim_pitch + mvy + joystick_vy
-                total_vy = drone.hover_trim_roll + mvx + joystick_vx
+                total_vx = drone.hover_trim_pitch + mvx + joystick_vx
+                total_vy = drone.hover_trim_roll + mvy + joystick_vy
 
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(
@@ -316,8 +316,8 @@ def run_manual_control(drone):
                 else:
                     mvx, mvy = 0.0, 0.0
 
-                total_vx = drone.hover_trim_pitch + mvy
-                total_vy = drone.hover_trim_roll + mvx
+                total_vx = drone.hover_trim_pitch + mvx
+                total_vy = drone.hover_trim_roll + mvy
 
                 if not drone.debug_mode:
                     cf.commander.send_hover_setpoint(

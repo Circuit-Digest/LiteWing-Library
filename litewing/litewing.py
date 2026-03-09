@@ -587,8 +587,8 @@ class LiteWing:
                 else:
                     mvx, mvy = 0.0, 0.0
 
-                total_vx = self.hover_trim_pitch + mvy
-                total_vy = self.hover_trim_roll + mvx
+                total_vx = self.hover_trim_pitch + mvx
+                total_vy = self.hover_trim_roll + mvy
 
                 # Takeoff ramp
                 if self.enable_takeoff_ramp:
@@ -631,7 +631,7 @@ class LiteWing:
                 else:
                     mvx, mvy = 0.0, 0.0
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
                 self._cmd_height = self.target_height
@@ -675,8 +675,8 @@ class LiteWing:
             else:
                 mvx, mvy = 0.0, 0.0
 
-            total_vx = self.hover_trim_pitch + mvy
-            total_vy = self.hover_trim_roll + mvx
+            total_vx = self.hover_trim_pitch + mvx
+            total_vy = self.hover_trim_roll + mvy
 
             if not self.debug_mode:
                 cf.commander.send_hover_setpoint(
@@ -815,7 +815,7 @@ class LiteWing:
                 else:
                     mvx, mvy = 0.0, 0.0
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
                 self._cmd_height = self.target_height
@@ -842,8 +842,8 @@ class LiteWing:
                 gyro_z=self._sensors.gyro_z,
                 flight_phase=self._flight_phase,
                 target_height=self._cmd_height,
-                cmd_vx=self.hover_trim_pitch + corr_vy,
-                cmd_vy=self.hover_trim_roll + corr_vx,
+                cmd_vx=self.hover_trim_pitch + corr_vx,
+                cmd_vy=self.hover_trim_roll + corr_vy,
             )
 
     # === Movement Commands (Tier 1) ===
@@ -946,7 +946,7 @@ class LiteWing:
                     max_correction=move_max_correction,
                 )
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
 
@@ -964,7 +964,7 @@ class LiteWing:
                     self._sensors.height, True,
                 )
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
             self._log_csv_if_active()
@@ -1044,7 +1044,7 @@ class LiteWing:
                     max_correction=move_max_correction,
                 )
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
 
@@ -1062,7 +1062,7 @@ class LiteWing:
                     self._sensors.height, True,
                 )
                 cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
                     0, self.target_height
                 )
             self._log_csv_if_active()
@@ -1330,8 +1330,14 @@ class LiteWing:
         if z_range > 0:
             altitude_for_calc = z_range / 1000.0
 
-        # Update position engine
-        self._position_engine.update_from_sensor(delta_x, delta_y, altitude_for_calc)
+        # Store raw firmware values BEFORE any axis remapping (for diagnostics)
+        self._sensors.raw_delta_x = delta_x   # literal motion.deltaX from firmware
+        self._sensors.raw_delta_y = delta_y   # literal motion.deltaY from firmware
+
+        # Swap axes: sensor deltaY → drone forward (X), sensor deltaX → drone lateral (Y)
+        # This aligns the optical flow frame with the drone's body frame at the source,
+        # so all downstream values (velocity, position, corrections) are in body frame.
+        self._position_engine.update_from_sensor(delta_y, delta_x, altitude_for_calc)
 
     def _battery_callback(self, timestamp, data, logconf):
         """Internal: called when new battery data arrives."""
