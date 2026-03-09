@@ -9,7 +9,9 @@ Usage:
     drone.stop_logging()
 
 The CSV file will contain columns for:
-    Timestamp, Position X/Y, Height, Range, Velocity X/Y, Correction VX/VY
+    Timestamp, Position, Height, Velocity, Corrections,
+    Battery, Roll/Pitch/Yaw, Gyro rates, Flight phase,
+    Target height, and Motor commands.
 """
 
 import csv
@@ -19,7 +21,7 @@ from datetime import datetime
 
 class FlightLogger:
     """
-    Records flight data to CSV files.
+    Records flight data to CSV files — LiteWing's blackbox recorder.
 
     Each row is a snapshot of sensor state at a point in time.
     Useful for analysing flight performance, PID tuning, and drift patterns.
@@ -74,13 +76,29 @@ class FlightLogger:
             "Velocity Y (m/s)",
             "Correction VX",
             "Correction VY",
+            "Battery (V)",
+            "Roll (deg)",
+            "Pitch (deg)",
+            "Yaw (deg)",
+            "Gyro X (deg/s)",
+            "Gyro Y (deg/s)",
+            "Gyro Z (deg/s)",
+            "Flight Phase",
+            "Target Height (m)",
+            "Cmd VX",
+            "Cmd VY",
         ])
 
         if logger:
             logger(f"Logging to CSV: {filename}")
 
     def log_row(self, pos_x, pos_y, height, range_height, vx, vy,
-                correction_vx=0.0, correction_vy=0.0, start_time=None):
+                correction_vx=0.0, correction_vy=0.0,
+                battery=0.0, roll=0.0, pitch=0.0, yaw=0.0,
+                gyro_x=0.0, gyro_y=0.0, gyro_z=0.0,
+                flight_phase="", target_height=0.0,
+                cmd_vx=0.0, cmd_vy=0.0,
+                start_time=None):
         """
         Write one row of flight data.
 
@@ -104,6 +122,17 @@ class FlightLogger:
             f"{vy:.6f}",
             f"{correction_vx:.6f}",
             f"{correction_vy:.6f}",
+            f"{battery:.2f}",
+            f"{roll:.2f}",
+            f"{pitch:.2f}",
+            f"{yaw:.2f}",
+            f"{gyro_x:.2f}",
+            f"{gyro_y:.2f}",
+            f"{gyro_z:.2f}",
+            flight_phase,
+            f"{target_height:.3f}",
+            f"{cmd_vx:.6f}",
+            f"{cmd_vy:.6f}",
         ])
 
     def stop(self, logger=None):
@@ -116,3 +145,4 @@ class FlightLogger:
                 logger(f"CSV log closed: {self._filepath}")
             self._filepath = None
             self._start_time = None
+
