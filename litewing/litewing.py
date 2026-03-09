@@ -80,6 +80,7 @@ class LiteWing:
         self._scf = None
         self._flight_active = False
         self._flight_phase = "IDLE"
+        self._cmd_height = 0.0  # actual commanded height (for logging)
         self._flight_thread = None
         self._manual_active = False
         self._manual_thread = None
@@ -600,6 +601,7 @@ class LiteWing:
                     cmd_height = self.target_height
 
                 cf.commander.send_hover_setpoint(total_vx, total_vy, 0, cmd_height)
+                self._cmd_height = cmd_height
 
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
@@ -632,6 +634,7 @@ class LiteWing:
                     self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
                     0, self.target_height
                 )
+                self._cmd_height = self.target_height
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
@@ -660,6 +663,7 @@ class LiteWing:
                self._flight_active):
             current_land_height -= self.descent_rate * dt
             current_land_height = max(current_land_height, 0.0)
+            self._cmd_height = current_land_height
 
             # Keep position hold active during descent
             if self._sensors.sensor_data_ready and current_land_height > 0.03:
@@ -814,16 +818,32 @@ class LiteWing:
                     self.hover_trim_pitch + mvy, self.hover_trim_roll + mvx,
                     0, self.target_height
                 )
+                self._cmd_height = self.target_height
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
     def _log_csv_if_active(self):
         """Log a CSV row if flight logging is active."""
         if self._flight_logger.is_logging:
+            corr_vx = self._position_hold.correction_vx
+            corr_vy = self._position_hold.correction_vy
             self._flight_logger.log_row(
                 self._position_engine.x, self._position_engine.y,
                 self._sensors.height, self._sensors.range_height,
                 self._position_engine.vx, self._position_engine.vy,
+                correction_vx=corr_vx,
+                correction_vy=corr_vy,
+                battery=self._sensors.battery_voltage,
+                roll=self._sensors.roll,
+                pitch=self._sensors.pitch,
+                yaw=self._sensors.yaw,
+                gyro_x=self._sensors.gyro_x,
+                gyro_y=self._sensors.gyro_y,
+                gyro_z=self._sensors.gyro_z,
+                flight_phase=self._flight_phase,
+                target_height=self._cmd_height,
+                cmd_vx=self.hover_trim_pitch + corr_vy,
+                cmd_vy=self.hover_trim_roll + corr_vx,
             )
 
     # === Movement Commands (Tier 1) ===

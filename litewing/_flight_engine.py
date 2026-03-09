@@ -456,4 +456,13 @@ def _log_csv_row(drone):
         drone._position_engine.vy,
         drone._position_hold.correction_vx,
         drone._position_hold.correction_vy,
+        battery=drone._sensors.battery_voltage,
+        roll=drone._sensors.roll,
+        pitch=drone._sensors.pitch,
+        yaw=drone._sensors.yaw,
+        gyro_x=drone._sensors.gyro_x,
+        gyro_y=drone._sensors.gyro_y,
+        gyro_z=drone._sensors.gyro_z,
+        flight_phase=drone._flight_phase,
+        target_height=drone.target_height,
     )

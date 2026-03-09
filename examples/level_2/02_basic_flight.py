@@ -26,6 +26,7 @@ drone.debug_mode = False
 
 # ── Connect ──────────────────────────────────────────
 drone.connect()
+drone.clear_leds()
 time.sleep(2)
 plot = drone.start_dashboard()
 # Pre-flight check
@@ -41,7 +42,7 @@ time.sleep(1)
 # ── Fly! ─────────────────────────────────────────────
 print("Arming...")
 drone.arm()
-
+drone.start_logging("my_flight_log.csv")
 print(f"Taking off to {drone.target_height}m...")
 drone.takeoff()
 
@@ -69,7 +70,8 @@ print("Landing...")
 drone.land()
 
 # ── Done ─────────────────────────────────────────────
-drone.clear_leds()
+# drone.clear_leds()
 plot.stop()
+drone.stop_logging()
 drone.disconnect()
 print("Flight complete!")
