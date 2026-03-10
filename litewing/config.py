@@ -86,6 +86,14 @@ class _Defaults:
     CONTROL_UPDATE_RATE = 0.02
     # Empirical scaling factor for optical flow sensor (adjust for your setup)
     OPTICAL_FLOW_SCALE = 4.4
+    # Flow sensor pixel grid size
+    # DEFAULT EMPIRICAL: 30.0 (Tuned for drone's dead reckoning)
+    # ORIGINAL DATASHEET: 35.0 (Physical HW pixel array from mm_flow.c)
+    OPTICAL_FLOW_NPIX = 35.0
+    # Flow sensor field of view aperture in radians
+    # DEFAULT EMPIRICAL: 0.094247 (5.4 degrees * DEG_TO_RAD)
+    # ORIGINAL DATASHEET: 0.71674 (2 * sin(42 deg / 2) from mm_flow.c)
+    OPTICAL_FLOW_FOV_RAD = 0.0733
     # True = velocity calculation depends on altitude, False = fixed scaling
     USE_HEIGHT_SCALING = True
     # Velocity smoothing filter strength (1.0 = raw, 0.0 = maximum smoothing)

@@ -70,7 +70,10 @@ class PositionEngine:
         dt = cfg.SENSOR_PERIOD_MS / 1000.0
 
         if cfg.USE_HEIGHT_SCALING:
-            velocity_constant = (5.4 * cfg.DEG_TO_RAD) / (30.0 * dt)
+            # Fallback to defaults if custom config doesn't have the new properties
+            fov_rad = getattr(cfg, 'OPTICAL_FLOW_FOV_RAD', 5.4 * cfg.DEG_TO_RAD)
+            npix = getattr(cfg, 'OPTICAL_FLOW_NPIX', 30.0)
+            velocity_constant = fov_rad / (npix * dt)
             return delta_value * altitude * velocity_constant
         else:
             return delta_value * cfg.OPTICAL_FLOW_SCALE * dt
