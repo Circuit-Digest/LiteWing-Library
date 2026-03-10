@@ -390,16 +390,74 @@ scene.add(new THREE.HemisphereLight(0x89dceb, 0x1a1a2e, 0.3));
 const gridHelper = new THREE.GridHelper(4, 20, 0x3a3a5c, 0x2a2a3d);
 scene.add(gridHelper);
 
-// Axis indicators
+// ── Text label utility (canvas → sprite) ──
+function makeTextSprite(text, color, fontSize) {
+    const canvas = document.createElement('canvas');
+    const sz = fontSize || 48;
+    canvas.width = sz * text.length * 0.7;
+    canvas.height = sz * 1.4;
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'bold ' + sz + 'px monospace';
+    ctx.fillStyle = color || '#cdd6f4';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    const tex = new THREE.CanvasTexture(canvas);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(canvas.width / 300, canvas.height / 300, 1);
+    return sprite;
+}
+
+// Axis arrows
 function makeAxis(dir, color, len) {
     const mat = new THREE.LineBasicMaterial({ color });
     const pts = [new THREE.Vector3(0, 0, 0), dir.clone().multiplyScalar(len)];
     const geom = new THREE.BufferGeometry().setFromPoints(pts);
     return new THREE.Line(geom, mat);
 }
-scene.add(makeAxis(new THREE.Vector3(0, 0, -1), 0xa6e3a1, 0.6)); // Forward = -Z (green)
-scene.add(makeAxis(new THREE.Vector3(-1, 0, 0), 0xf38ba8, 0.4)); // Left = -X (red)
-scene.add(makeAxis(new THREE.Vector3(0, 1, 0), 0x89dceb, 0.4));  // Up = +Y (cyan)
+scene.add(makeAxis(new THREE.Vector3(0, 0, -1), 0xa6e3a1, 0.8)); // Forward = -Z (green)
+scene.add(makeAxis(new THREE.Vector3(-1, 0, 0), 0xf38ba8, 0.6)); // Left = -X (red)
+scene.add(makeAxis(new THREE.Vector3(0, 1, 0), 0x89dceb, 0.6));  // Up = +Y (cyan)
+
+// Axis labels
+const lblFwd = makeTextSprite('Forward (+X)', '#a6e3a1', 25);
+lblFwd.position.set(0, 0.08, -0.95);
+scene.add(lblFwd);
+
+const lblLeft = makeTextSprite('Left (+Y)', '#f38ba8', 25);
+lblLeft.position.set(-0.75, 0.08, 0);
+scene.add(lblLeft);
+
+// const lblUp = makeTextSprite('Height', '#89dceb', 25);
+// lblUp.position.set(0.08, 0.7, 0);
+// scene.add(lblUp);
+
+// ── Floor dimension tick marks (in meters) ──
+const tickColor = '#6c7086';
+const gridExtent = 2.0; // ±2.0 in 3D units = ±0.67m real (at SCALE=3)
+for (let v = -gridExtent; v <= gridExtent; v += 0.5) {
+    if (Math.abs(v) < 0.01) continue; // skip origin
+    const realMeters = (v / SCALE).toFixed(2);
+
+    // Along forward axis (-Z): tick labels on the floor
+    const tickZ = makeTextSprite(realMeters + 'm', tickColor, 15);
+    tickZ.position.set(0.12, 0.02, v);
+    scene.add(tickZ);
+
+    // Along left axis (-X): tick labels on the floor
+    const tickX = makeTextSprite(realMeters + 'm', tickColor, 15);
+    tickX.position.set(v, 0.02, 0.12);
+    scene.add(tickX);
+}
+
+// Height tick marks (vertical)
+for (let h = 0.1; h <= 0.6; h += 0.1) {
+    const hScaled = h * SCALE;
+    const tickH = makeTextSprite(h.toFixed(1) + 'm', tickColor, 10);
+    tickH.position.set(0.12, hScaled, 0.12);
+    scene.add(tickH);
+}
 
 // Flight path line — map drone coords to Three.js:
 //   Three.js X = -Drone Y (so +left = screen left when viewed from default angle)
@@ -590,7 +648,7 @@ function updateAll(idx) {
     // Apply attitude — AMPLIFIED for visual clarity (real angles are only ±5°)
     droneModel.rotation.set(0, 0, 0);
     droneModel.rotation.order = 'YXZ';
-    droneModel.rotation.x = THREE.MathUtils.degToRad(-D.pitch[idx] * ATTITUDE_AMPLIFY);
+    droneModel.rotation.x = THREE.MathUtils.degToRad(D.pitch[idx] * ATTITUDE_AMPLIFY);
     droneModel.rotation.z = THREE.MathUtils.degToRad(-D.roll[idx] * ATTITUDE_AMPLIFY);
     droneModel.rotation.y = THREE.MathUtils.degToRad(-D.yaw[idx]);  // yaw at real scale
 
