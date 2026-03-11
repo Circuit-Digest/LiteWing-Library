@@ -36,15 +36,15 @@ drone.takeoff()
 print("\n--- fly_to: Triangle pattern ---")
 
 # Fly forward
-drone.fly_to(0.3, 0.0, speed=0.3)    # +X = forward
+drone.fly_to(0.3, 0.0, speed=0.25)    # +X = forward
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
 
 # Fly forward-left (corner)
-drone.fly_to(0.3, 0.3, speed=0.3)    # +X forward, +Y left
+drone.fly_to(0.3, 0.3, speed=0.25)    # +X forward, +Y left
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
 
-# Return to origin
-drone.fly_to(0.0, 0.0, speed=0.3)
+# Move Diagonal Right-Backward (back to origin)
+drone.fly_to(0.0, 0.0, speed=0.25)
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
 
 drone.hover(2)
@@ -52,12 +52,26 @@ drone.hover(2)
 # ── Method 2: fly_path (waypoint list) ───────────────
 print("\n--- fly_path: Square pattern ---")
 
-# Square: Forward → Forward-Left → Left → Back to origin
+# Square pattern movements: Forward → Left → Backward → Right
+#
+#                        +X (Forward)
+#                             ^
+#         (0.3, 0.3)          |
+#              * <----------- * (0.3, 0.0)
+#              |              |
+#              |              |
+#              v              ^
+# +Y (Left) <--*------------> O (0.0, 0.0) Origin
+#         (0.0, 0.3)          |
+#                             |
+#                             v
+#                            -X (Backward)
+#
 square = [
-    (0.3,  0.0),   # Forward
-    (0.3,  0.3),   # Forward-Left corner
-    (0.0,  0.3),   # Left
-    (0.0,  0.0),   # Back to start
+    (0.3,  0.0),   # Move Forward
+    (0.3,  0.3),   # Move Left (to Forward-Left corner)
+    (0.0,  0.3),   # Move Backward (to Left corner)
+    (0.0,  0.0),   # Move Right (back to origin)
 ]
 
 drone.fly_path(square, speed=0.3)
