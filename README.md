@@ -23,13 +23,13 @@ chmod +x install.sh
 # Navigate to the litewing-library folder
 cd litewing-library
 
-# Install in development mode (recommended for students)
-pip install -e .
+# Install the library
+pip install .
 ```
 
 ### Requirements
 - **Python 3.11** (required - other versions will not work)
-  - Download: [Python 3.11.9](https://www.python.org/downloads/release/python-3119/)
+  - Download: [Python 3.11](https://www.python.org/downloads/release/python-3119/)
   - Check **"Add Python to PATH"** during installation!
 - [cflib](https://github.com/bitcraze/crazyflie-lib-python) (installed automatically)
 - [matplotlib](https://matplotlib.org/) (installed automatically)

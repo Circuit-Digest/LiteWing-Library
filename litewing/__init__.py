@@ -26,4 +26,11 @@ from .sensors import SensorData
 from .pid import PIDConfig
 
 __all__ = ["LiteWing", "SensorData", "PIDConfig"]
-__version__ = "0.1.0"
+
+# Version is read from pyproject.toml automatically.
+# Just bump the version in pyproject.toml — it propagates here.
+try:
+    from importlib.metadata import version as _get_version
+    __version__ = _get_version("litewing")
+except Exception:
+    __version__ = "0.1.1"  # Fallback if not installed via pip

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.1] - 2026-03-12
+
+### Changed
+- Version is now auto-synced from `pyproject.toml` via `importlib.metadata` — single source of truth.
+- Signal handler (`Ctrl+C` emergency stop) is now opt-in via `install_signal_handler` parameter.
+- `install.bat` now works correctly when run from any directory (`pushd`/`popd`).
+
+### Fixed
+- Version mismatch between `pyproject.toml` and `__init__.py`.
+- README manual install section no longer uses editable mode (`-e`).
+
 ## [0.1.0] - 2025-02-17
 
 ### Added

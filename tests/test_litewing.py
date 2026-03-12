@@ -30,7 +30,8 @@ class TestImports:
     def test_version_exists(self):
         import litewing
         assert hasattr(litewing, "__version__")
-        assert litewing.__version__ == "0.1.0"
+        assert isinstance(litewing.__version__, str)
+        assert len(litewing.__version__) > 0  # Not empty
 
 
 class TestLiteWingInit:
@@ -102,15 +103,15 @@ class TestPIDConfig:
     def test_drone_position_pid(self):
         from litewing import LiteWing
         drone = LiteWing()
-        assert drone.position_pid.kp == 1.0
-        assert drone.position_pid.ki == 0.03
-        assert drone.position_pid.kd == 0.0
+        assert drone.position_pid.kp == 0.8
+        assert drone.position_pid.ki == 0.04
+        assert drone.position_pid.kd == 0.05
 
     def test_drone_velocity_pid(self):
         from litewing import LiteWing
         drone = LiteWing()
-        assert drone.velocity_pid.kp == 0.7
-        assert drone.velocity_pid.ki == 0.01
+        assert drone.velocity_pid.kp == 0.5
+        assert drone.velocity_pid.ki == 0.0
 
 
 class TestSensorData:

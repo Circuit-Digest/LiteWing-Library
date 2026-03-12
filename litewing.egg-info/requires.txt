@@ -1,5 +1,0 @@
-cflib @ https://github.com/Circuit-Digest/crazyflie-lib-python/archive/refs/heads/master.zip
-matplotlib
-
-[dev]
-pytest
