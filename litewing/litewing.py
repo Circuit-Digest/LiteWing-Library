@@ -73,7 +73,7 @@ class LiteWing:
         ip: The IP address of the drone (default: "192.168.43.42").
     """
 
-    def __init__(self, ip=None):
+    def __init__(self, ip=None, install_signal_handler=True):
         # === Connection ===
         self._ip = ip or defaults.DRONE_IP
         self._port = defaults.DRONE_PORT
@@ -179,12 +179,14 @@ class LiteWing:
         # === System-wide Ctrl+C emergency stop ===
         # This ensures pressing Ctrl+C ALWAYS kills motors immediately,
         # even if the student forgot to add error handling.
-        def _ctrl_c_handler(sig, frame):
-            print("\n Ctrl+C detected — EMERGENCY STOP!")
-            self.emergency_stop()
-            raise SystemExit(1)
+        # Set install_signal_handler=False if embedding in a larger app.
+        if install_signal_handler:
+            def _ctrl_c_handler(sig, frame):
+                print("\n Ctrl+C detected — EMERGENCY STOP!")
+                self.emergency_stop()
+                raise SystemExit(1)
 
-        signal.signal(signal.SIGINT, _ctrl_c_handler)
+            signal.signal(signal.SIGINT, _ctrl_c_handler)
 
     # === Context Manager (with statement) ===
 

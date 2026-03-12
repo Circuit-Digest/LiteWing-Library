@@ -1,6 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM --- Change to the directory where this script lives ---
+pushd "%~dp0"
+
 REM --- Setup ANSI color codes ---
 for /f %%e in ('powershell -NoProfile -Command "[char]27"') do set "E=%%e"
 set "R=!E![0m"
@@ -158,6 +161,7 @@ echo     1. Turn on the drone
 echo     2. Connect to the drone's WiFi network
 echo     3. Run: !CYN!!PY311_CMD! examples\level_1\01_battery_voltage.py!R!
 echo.
+popd
 pause
 exit /b 0
 
