@@ -33,4 +33,4 @@ try:
     from importlib.metadata import version as _get_version
     __version__ = _get_version("litewing")
 except Exception:
-    __version__ = "0.1.1"  # Fallback if not installed via pip
+    __version__ = "0.1.2"  # Fallback if not installed via pip

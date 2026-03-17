@@ -17,42 +17,46 @@ Controls:
 Hold modes:
     "current" — release keys → hold at current position (free flight)
     "origin"  — release keys → snap back to launch point (spring mode)
-
-Note: start_manual_control() handles connect, arm, takeoff, and landing
-internally. You do NOT need to call connect() or arm() before this.
 """
 
 from litewing import LiteWing
+import time
 
-drone = LiteWing("192.168.43.42")
-drone.target_height = 0.3
+with LiteWing("192.168.43.42") as drone:
+    drone.connect()
+    drone.target_height = 0.3
 
-# ── Manual control settings ──────────────────────────
+    # ── Manual control settings ──────────────────────────
 
-# How fast the drone responds to key input
-drone.sensitivity = 0.2  # Default: 0.2 (m/s per key)
+    # How fast the drone responds to key input
+    drone.sensitivity = 0.2  # Default: 0.2 (m/s per key)
 
-# What happens when you release all keys?
-drone.hold_mode = "current"  # "current" = stay here, "origin" = go back
+    # What happens when you release all keys?
+    drone.hold_mode = "current"  # "current" = stay here, "origin" = go back
 
-print("Manual Control Settings:")
-print(f"  Sensitivity: {drone.sensitivity}")
-print(f"  Hold mode:   {drone.hold_mode}")
-print()
-print("Controls: WASD to move, SPACE or Q to land")
-print()
+    print("Manual Control Settings:")
+    print(f"  Sensitivity: {drone.sensitivity}")
+    print(f"  Hold mode:   {drone.hold_mode}")
+    print()
+    print("Controls: WASD to move, SPACE or Q to land")
+    print()
 
-# ── Start manual control ─────────────────────────────
-# This starts a background thread that handles:
-#   connect → arm → takeoff → WASD loop → land → disconnect
-drone.start_manual_control()
+    # ── Start manual control ─────────────────────────────
+    # This starts a background thread that handles:
+    #   arm → takeoff → WASD loop → land
+    # Note: connect/disconnect are now handled by you (the student).
+    drone.start_manual_control()
 
-# Wait for manual control to finish (user presses SPACE/Q to land)
-if drone._manual_thread:
-    drone._manual_thread.join()
+    # Wait for manual control to finish (user presses SPACE/Q to land)
+    # The stop_manual_control() method joins the thread internally.
+    try:
+        while drone._manual_active:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        drone.stop_manual_control()
 
-print("Manual control ended.")
-print("Done!")
+    print("Manual control ended.")
+    print("Done!")
 
 # ── For GUI integration ──────────────────────────────
 # If building a GUI (tkinter, PyQt, etc.), you can send key events

@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.2] - 2026-03-17
+
+### Changed
+- Decoupled connection management from `start_manual_control()`. It now requires an external connection (`drone.connect()`).
+- Manual control examples updated to use `with LiteWing() as drone:` and `drone.connect()`.
+- `run_manual_control` now automatically calls `drone.arm()` if the drone is not already armed.
+
 ## [0.1.1] - 2026-03-12
 
 ### Changed
