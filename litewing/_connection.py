@@ -32,14 +32,22 @@ def setup_debug_wrappers(cf, logger_fn=None):
         return wrapper
 
     if getattr(cf, 'commander', None):
-        cf.commander.send_setpoint = make_debug_wrapper(cf.commander.send_setpoint, "commander.send_setpoint")
-        cf.commander.send_hover_setpoint = make_debug_wrapper(cf.commander.send_hover_setpoint, "commander.send_hover_setpoint")
+        for cmd in [
+            'send_setpoint', 'send_hover_setpoint', 'send_position_setpoint',
+            'send_velocity_world_setpoint', 'send_zdistance_setpoint',
+            'send_stop_setpoint', 'send_alt_hold_setpoint', 'send_full_state_setpoint'
+        ]:
+            if hasattr(cf.commander, cmd):
+                setattr(cf.commander, cmd, make_debug_wrapper(getattr(cf.commander, cmd), f"commander.{cmd}"))
 
     if getattr(cf, 'high_level_commander', None):
-        cf.high_level_commander.takeoff = make_debug_wrapper(cf.high_level_commander.takeoff, "high_level_commander.takeoff")
-        cf.high_level_commander.land = make_debug_wrapper(cf.high_level_commander.land, "high_level_commander.land")
-        cf.high_level_commander.stop = make_debug_wrapper(cf.high_level_commander.stop, "high_level_commander.stop")
-        cf.high_level_commander.go_to = make_debug_wrapper(cf.high_level_commander.go_to, "high_level_commander.go_to")
+        for cmd in [
+            'takeoff', 'land', 'stop', 'go_to', 'set_group_mask',
+            'start_trajectory', 'define_trajectory',
+            'takeoff_with_velocity', 'land_with_velocity'
+        ]:
+            if hasattr(cf.high_level_commander, cmd):
+                setattr(cf.high_level_commander, cmd, make_debug_wrapper(getattr(cf.high_level_commander, cmd), f"high_level_commander.{cmd}"))
 
     if getattr(cf, 'param', None):
         cf.param.set_value = make_debug_wrapper(cf.param.set_value, "param.set_value")

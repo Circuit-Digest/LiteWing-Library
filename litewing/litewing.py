@@ -143,7 +143,10 @@ class LiteWing:
         self.momentum_compensation_time = defaults.MOMENTUM_COMPENSATION_TIME
         self.settling_duration = defaults.SETTLING_DURATION
         self.settling_correction_factor = defaults.SETTLING_CORRECTION_FACTOR
-        self._manual_keys = {"w": False, "s": False, "a": False, "d": False}
+        self._manual_keys = {
+            "w": False, "s": False, "a": False, "d": False,
+            "q": False, "e": False, "r": False, "f": False
+        }
 
         # Firmware parameters
         self.enable_firmware_params = defaults.ENABLE_FIRMWARE_PARAMS

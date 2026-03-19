@@ -29,9 +29,9 @@ class _Defaults:
     # How long to hover by default (seconds)
     HOVER_DURATION = 20.0
     # Time in seconds for the landing descent (safety timeout)
-    LANDING_TIME = 2.0
+    LANDING_TIME = 3.0
     # Descent rate in m/s for gradual landing (0.3 = 30cm per second)
-    DESCENT_RATE = 0.2
+    DESCENT_RATE = 0.1
 
     # === DEBUG & SAFETY ===
     # Set True to disable motors (sensors and logging still work)
