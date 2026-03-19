@@ -161,6 +161,15 @@ class LiteWing:
         self.waypoint_stabilization_time = defaults.WAYPOINT_STABILIZATION_TIME
         self.maneuver_distance = defaults.MANEUVER_DISTANCE
 
+        # Position hold mode (firmware or library)
+        self.position_hold_mode = defaults.POSITION_HOLD_MODE
+
+        # Firmware flight defaults
+        self.default_takeoff_duration = defaults.DEFAULT_TAKEOFF_DURATION
+        self.default_landing_duration = defaults.DEFAULT_LANDING_DURATION
+        self.default_flight_speed = defaults.DEFAULT_FLIGHT_SPEED
+        self.max_flight_speed = defaults.MAX_FLIGHT_SPEED
+
         # === Internal state (hidden from learners) ===
         self._position_cfg_proxy = _PositionConfigProxy(self)
         self._sensors = _SensorState()
@@ -533,19 +542,39 @@ class LiteWing:
 
         cf = self._cf_instance
         if not self.debug_mode:
-            cf.commander.send_setpoint(0, 0, 0, 0)
-            time.sleep(0.1)
-            cf.param.set_value("commander.enHighLevel", "1")
-            time.sleep(0.5)
+            if self.position_hold_mode == "firmware":
+                # Firmware mode: match Position.py exactly
+                # DO NOT send send_setpoint — it activates Port 0x07 commander
+                # which conflicts with Port 0x08 high-level commander
+                if self._logger_fn:
+                    self._logger_fn("[CMD] param.set_value('commander.enHighLevel', '1')")
+                cf.param.set_value("commander.enHighLevel", "1")
+                time.sleep(0.1)
+
+                if self._logger_fn:
+                    self._logger_fn("Resetting EKF position to origin...")
+                    self._logger_fn("[CMD] param.set_value('kalman.resetEstimation', '1')")
+                cf.param.set_value("kalman.resetEstimation", "1")
+                time.sleep(0.1)
+                if self._logger_fn:
+                    self._logger_fn("[CMD] param.set_value('kalman.resetEstimation', '0')")
+                cf.param.set_value("kalman.resetEstimation", "0")
+                time.sleep(2)  # Wait for EKF to converge
+            else:
+                # Library mode: unlock commander with zero setpoint
+                cf.commander.send_setpoint(0, 0, 0, 0)
+                time.sleep(0.1)
+                cf.param.set_value("commander.enHighLevel", "1")
+                time.sleep(0.5)
 
         self._flight_active = True
         self._position_engine.reset()
         self._position_hold.reset()
 
         if self._logger_fn:
-            self._logger_fn("Drone armed and ready!")
+            self._logger_fn(f"Drone armed and ready! (mode={self.position_hold_mode})")
 
-    def takeoff(self, height=None, speed=None):
+    def takeoff(self, height=None, duration=None):
         """
         Take off and hover at the specified height.
 
@@ -554,7 +583,7 @@ class LiteWing:
 
         Args:
             height: Target height in meters (default: drone.target_height).
-            speed: Not used yet, reserved for future takeoff speed control.
+            duration: Time in seconds for takeoff (default: drone.default_takeoff_duration).
         """
         if self._scf is None:
             raise RuntimeError("Not connected! Call connect() first.")
@@ -564,22 +593,51 @@ class LiteWing:
         if height is not None:
             self.target_height = height
 
+        dur = duration if duration is not None else self.default_takeoff_duration
         cf = self._cf_instance
         self._flight_phase = "TAKEOFF"
         if self._logger_fn:
-            self._logger_fn(f"Taking off to {self.target_height}m...")
+            self._logger_fn(f"Taking off to {self.target_height}m in {dur}s...")
 
         # Start CSV logging if enabled
         if self.enable_csv_logging and not self._flight_logger.is_logging:
             self._flight_logger.start(logger=self._logger_fn)
 
+        # ── FIRMWARE MODE ─────────────────────────────────────────
+        if self.position_hold_mode == "firmware":
+            # Use high-level commander takeoff (Port 0x08)
+            # yaw=None → firmware sets useCurrentYaw=True automatically
+            if self._logger_fn:
+                self._logger_fn(
+                    f"[CMD] high_level_commander.takeoff("
+                    f"height={self.target_height}, duration={dur}, yaw=None)"
+                )
+            cf.high_level_commander.takeoff(self.target_height, dur, yaw=None)
+            self._cmd_height = self.target_height
+
+            # Wait for takeoff trajectory to complete
+            t0 = time.time()
+            while time.time() - t0 < dur and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+
+            # Post-takeoff stabilisation (firmware holds position)
+            self._flight_phase = "HOVERING"
+            if self._logger_fn:
+                self._logger_fn("[CMD] (firmware holding position autonomously)")
+            t0 = time.time()
+            while time.time() - t0 < 1.0 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # ── LIBRARY MODE (legacy Port 0x07) ───────────────────────
         takeoff_start = time.time()
         takeoff_height_start = self._sensors.height
 
         while (time.time() - takeoff_start < self.takeoff_time and
                self._flight_active):
             if not self.debug_mode:
-                # Position hold during takeoff if height is sufficient
                 if (self._sensors.sensor_data_ready and
                         self._sensors.height > 0.04):
                     mvx, mvy = self._position_hold.calculate_corrections(
@@ -593,7 +651,6 @@ class LiteWing:
                 total_vx = self.hover_trim_pitch + mvx
                 total_vy = self.hover_trim_roll + mvy
 
-                # Takeoff ramp
                 if self.enable_takeoff_ramp:
                     elapsed = time.time() - takeoff_start
                     progress = min(1.0, elapsed / self.takeoff_time)
@@ -641,26 +698,54 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
-    def land(self):
+    def land(self, duration=None):
         """
         Land the drone safely.
 
-        Descends to ground and stops motors.
+        Args:
+            duration: Time in seconds for landing (default: drone.default_landing_duration).
         """
         if self._scf is None or not self._flight_active:
             self._flight_active = False
             return
 
+        dur = duration if duration is not None else self.default_landing_duration
         cf = self._cf_instance
         self._flight_phase = "LANDING"
         if self._logger_fn:
-            self._logger_fn("Landing...")
+            self._logger_fn(f"Landing over {dur}s...")
 
+        # ── FIRMWARE MODE ─────────────────────────────────────────
+        if self.position_hold_mode == "firmware":
+            if self._logger_fn:
+                self._logger_fn(
+                    f"[CMD] high_level_commander.land("
+                    f"height=0.0, duration={dur}, yaw=None)"
+                )
+            cf.high_level_commander.land(0.0, dur, yaw=None)
+
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+
+            if not self.debug_mode:
+                if self._logger_fn:
+                    self._logger_fn("[CMD] high_level_commander.stop()")
+                cf.high_level_commander.stop()
+
+            self._flight_active = False
+            self._flight_phase = "IDLE"
+            self._flight_logger.stop(logger=self._logger_fn)
+            if self._logger_fn:
+                self._logger_fn("Landed!")
+            return
+
+        # ── LIBRARY MODE (legacy Port 0x07) ───────────────────────
         land_start = time.time()
         current_land_height = self.target_height
-        dt = 0.02  # 50Hz control loop
+        dt = 0.02
 
-        # Gradual descent: lower target height smoothly with position hold
         while (current_land_height > 0.02 and
                time.time() - land_start < self.landing_time and
                self._flight_active):
@@ -668,7 +753,6 @@ class LiteWing:
             current_land_height = max(current_land_height, 0.0)
             self._cmd_height = current_land_height
 
-            # Keep position hold active during descent
             if self._sensors.sensor_data_ready and current_land_height > 0.03:
                 mvx, mvy = self._position_hold.calculate_corrections(
                     self._position_engine.x, self._position_engine.y,
@@ -688,7 +772,6 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(dt)
 
-        # Brief settle at ground level before killing motors
         settle_start = time.time()
         while time.time() - settle_start < 0.3 and self._flight_active:
             if not self.debug_mode:
@@ -697,14 +780,11 @@ class LiteWing:
                 )
             time.sleep(0.02)
 
-        # Stop motors
         if not self.debug_mode:
             cf.commander.send_setpoint(0, 0, 0, 0)
 
         self._flight_active = False
         self._flight_phase = "IDLE"
-
-        # Stop CSV logging
         self._flight_logger.stop(logger=self._logger_fn)
 
         if self._logger_fn:
@@ -767,21 +847,22 @@ class LiteWing:
         """
         Hover in place for the specified duration.
 
-        Actively maintains position hold while waiting.
+        In firmware mode, the high-level commander holds position autonomously.
+        In library mode, actively streams hold setpoints.
 
         Args:
             seconds: How long to hover in seconds.
         """
         if self._scf is None or not self._flight_active:
-            # Not in flight — just sleep
             time.sleep(seconds)
             return
 
         cf = self._cf_instance
         start = time.time()
         _low_bat_warned = False
+
         while (time.time() - start < seconds and self._flight_active):
-            # Battery safety check
+            # Battery safety check (applies to both modes)
             voltage = self._sensors.battery_voltage
             if voltage > 0:
                 if voltage < defaults.CRITICAL_BATTERY_THRESHOLD:
@@ -808,20 +889,26 @@ class LiteWing:
                     except Exception:
                         pass
 
-            if not self.debug_mode:
-                if self._sensors.sensor_data_ready:
-                    mvx, mvy = self._position_hold.calculate_corrections(
-                        self._position_engine.x, self._position_engine.y,
-                        self._position_engine.vx, self._position_engine.vy,
-                        self._sensors.height, True, current_yaw=self._sensors.yaw
+            if self.position_hold_mode == "firmware":
+                # Firmware holds position autonomously — no commands needed
+                pass
+            else:
+                # Library mode: stream hover setpoints via Port 0x07
+                if not self.debug_mode:
+                    if self._sensors.sensor_data_ready:
+                        mvx, mvy = self._position_hold.calculate_corrections(
+                            self._position_engine.x, self._position_engine.y,
+                            self._position_engine.vx, self._position_engine.vy,
+                            self._sensors.height, True, current_yaw=self._sensors.yaw
+                        )
+                    else:
+                        mvx, mvy = 0.0, 0.0
+                    cf.commander.send_hover_setpoint(
+                        self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
+                        0, self.target_height
                     )
-                else:
-                    mvx, mvy = 0.0, 0.0
-                cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
-                    0, self.target_height
-                )
-                self._cmd_height = self.target_height
+                    self._cmd_height = self.target_height
+
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
@@ -902,14 +989,10 @@ class LiteWing:
 
     def _execute_movement(self, dx, dy, speed):
         """
-        Execute a relative movement using position hold.
+        Execute a relative movement.
 
-        This is a BLOCKING call — it sets the position hold target to the
-        new position and runs a hover loop until the drone arrives (within
-        waypoint_threshold) or times out (waypoint_timeout).
-
-        The `speed` parameter controls the maximum velocity (m/s) by
-        overriding max_correction in the PID controller.
+        In firmware mode, uses high_level_commander go_to (relative).
+        In library mode, uses PID + send_hover_setpoint.
         """
         if self._scf is None or not self._flight_active:
             if self._logger_fn:
@@ -917,10 +1000,28 @@ class LiteWing:
             return
 
         cf = self._cf_instance
+
+        if self.position_hold_mode == "firmware":
+            import math
+            distance = math.sqrt(dx**2 + dy**2)
+            spd = min(speed, self.max_flight_speed)
+            dur = max(distance / spd, 0.5)
+
+            if self._logger_fn:
+                self._logger_fn(
+                    f"Moving by ({dx:.2f}, {dy:.2f}) in {dur:.1f}s"
+                )
+
+            cf.high_level_commander.go_to(dx, dy, 0, 0, dur, relative=True)
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # Library mode
         target_x = self._position_engine.x + dx
         target_y = self._position_engine.y + dy
-
-        # Set position hold target to the new position
         self._position_hold.set_target(target_x, target_y)
 
         if self._logger_fn:
@@ -929,14 +1030,11 @@ class LiteWing:
                 f"at {speed:.1f} m/s"
             )
 
-        # Use speed as the velocity clamp (max_correction)
         move_max_correction = min(speed, self.max_correction)
 
         start = time.time()
         while (time.time() - start < self.waypoint_timeout and
                self._flight_active):
-
-            # Check if we've reached the target
             dist = ((self._position_engine.x - target_x) ** 2 +
                     (self._position_engine.y - target_y) ** 2) ** 0.5
             if dist < self.waypoint_threshold:
@@ -1002,17 +1100,19 @@ class LiteWing:
 
     # === Advanced Flight (Tier 3) ===
 
-    def fly_to(self, x, y, speed=0.3, threshold=None):
+    def fly_to(self, x, y, z=None, yaw=None, speed=None, threshold=None):
         """
-        Fly to an absolute position (x, y) using position hold.
+        Fly to an absolute position.
 
-        This is a BLOCKING call — it returns when the drone reaches
-        the target (within threshold) or times out.
+        In firmware mode, uses high_level_commander go_to.
+        In library mode, uses PID + send_hover_setpoint.
 
         Args:
             x: Target X position in meters.
             y: Target Y position in meters.
-            speed: Maximum velocity setpoint (m/s).
+            z: Target Z (height) in meters (default: target_height).
+            yaw: Target yaw in radians for firmware / degrees for library.
+            speed: Flight speed in m/s (default: default_flight_speed).
             threshold: How close is "close enough" (meters).
         """
         if self._scf is None or not self._flight_active:
@@ -1021,8 +1121,45 @@ class LiteWing:
             return
         if threshold is None:
             threshold = self.waypoint_threshold
+        if z is None:
+            z = self.target_height
+        if speed is None:
+            speed = self.default_flight_speed
 
         cf = self._cf_instance
+
+        if self.position_hold_mode == "firmware":
+            import math
+            # Get current position from EKF
+            cur_x = self._sensors.kalman_x
+            cur_y = self._sensors.kalman_y
+            cur_z = self._sensors.kalman_z
+
+            dx = x - cur_x
+            dy = y - cur_y
+            dz = z - cur_z
+            distance = math.sqrt(dx**2 + dy**2 + dz**2)
+
+            spd = min(speed, self.max_flight_speed)
+            dur = max(distance / spd, 0.5)
+
+            # Use current yaw if not specified
+            yaw_rad = yaw if yaw is not None else 0.0
+
+            if self._logger_fn:
+                self._logger_fn(
+                    f"Flying to ({x:.2f}, {y:.2f}, {z:.2f}) in {dur:.1f}s"
+                )
+
+            cf.high_level_commander.go_to(x, y, z, yaw_rad, dur, relative=False)
+
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # Library mode
         self._position_hold.set_target(x, y)
 
         if self._logger_fn:
@@ -1072,26 +1209,31 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
-    def fly_path(self, waypoints, speed=0.3, threshold=None):
+    def fly_path(self, waypoints, speed=None, threshold=None):
         """
-        Fly through a sequence of (x, y) waypoints.
+        Fly through a sequence of waypoints.
 
-        This is a BLOCKING call — it returns when all waypoints have
-        been reached or a timeout occurs.
+        Accepts flexible tuples: (x,y), (x,y,z), or (x,y,z,yaw).
 
         Args:
-            waypoints: List of (x, y) tuples.
-            speed: Maximum velocity setpoint (m/s).
+            waypoints: List of tuples.
+            speed: Flight speed in m/s.
             threshold: How close is "close enough" (meters).
         """
         if threshold is None:
             threshold = self.waypoint_threshold
-        for i, (x, y) in enumerate(waypoints):
+        if speed is None:
+            speed = self.default_flight_speed
+
+        for i, wp in enumerate(waypoints):
             if not self._flight_active:
                 break
+            x, y = wp[0], wp[1]
+            z = wp[2] if len(wp) > 2 else None
+            yaw = wp[3] if len(wp) > 3 else None
             if self._logger_fn:
                 self._logger_fn(f"Waypoint {i + 1}/{len(waypoints)}")
-            self.fly_to(x, y, speed=speed, threshold=threshold)
+            self.fly_to(x, y, z=z, yaw=yaw, speed=speed, threshold=threshold)
 
     # === Complete Flight Execution ===
 
@@ -1337,6 +1479,11 @@ class LiteWing:
         # Store raw firmware values BEFORE any axis remapping (for diagnostics)
         self._sensors.raw_delta_x = delta_x   # literal motion.deltaX from firmware
         self._sensors.raw_delta_y = delta_y   # literal motion.deltaY from firmware
+
+        # Extract EKF position estimates (firmware mode uses these)
+        self._sensors.kalman_x = data.get("kalman.stateX", self._sensors.kalman_x)
+        self._sensors.kalman_y = data.get("kalman.stateY", self._sensors.kalman_y)
+        self._sensors.kalman_z = data.get("kalman.stateZ", self._sensors.kalman_z)
 
         # Swap axes: sensor deltaY → drone forward (X), sensor deltaX → drone lateral (Y)
         # This aligns the optical flow frame with the drone's body frame at the source,

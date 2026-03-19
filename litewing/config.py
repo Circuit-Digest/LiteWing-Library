@@ -132,6 +132,17 @@ class _Defaults:
     FW_Z_POS_KP = 1.6         # Height position gain
     FW_Z_VEL_KP = 15.0        # Vertical velocity damping (stop height bouncing)
 
+    # === POSITION HOLD MODE ===
+    # "firmware" — Position hold on-drone via high_level_commander (Port 0x08) [DEFAULT]
+    # "library"  — Position hold in Python via send_hover_setpoint (Port 0x07) [LEGACY]
+    POSITION_HOLD_MODE = "firmware"
+
+    # === FIRMWARE FLIGHT DEFAULTS ===
+    DEFAULT_TAKEOFF_DURATION = 0.1   # seconds
+    DEFAULT_LANDING_DURATION = 2.0   # seconds
+    DEFAULT_FLIGHT_SPEED = 0.7       # m/s
+    MAX_FLIGHT_SPEED = 2           # m/s (safety clamp)
+
     # === CSV LOGGING ===
     # Set True to automatically create CSV log files
     ENABLE_CSV_LOGGING = False

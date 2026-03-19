@@ -66,6 +66,10 @@ class SensorData:
         self.gyro_y = 0.0
         self.gyro_z = 0.0
         self.thrust = 0.0
+        # EKF position estimates (firmware mode)
+        self.kalman_x = 0.0
+        self.kalman_y = 0.0
+        self.kalman_z = 0.0
 
     def __repr__(self):
         return (
@@ -100,6 +104,10 @@ class _SensorState:
         self.gyro_y = 0.0
         self.gyro_z = 0.0
         self.thrust = 0.0
+        # EKF position estimates (firmware mode)
+        self.kalman_x = 0.0
+        self.kalman_y = 0.0
+        self.kalman_z = 0.0
 
     def snapshot(self, position_engine):
         """Create a SensorData snapshot from current internal state."""
@@ -124,4 +132,7 @@ class _SensorState:
         s.gyro_y = self.gyro_y
         s.gyro_z = self.gyro_z
         s.thrust = self.thrust
+        s.kalman_x = self.kalman_x
+        s.kalman_y = self.kalman_y
+        s.kalman_z = self.kalman_z
         return s

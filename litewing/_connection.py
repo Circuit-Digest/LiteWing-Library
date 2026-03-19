@@ -44,6 +44,9 @@ def setup_sensor_logging(cf, motion_callback, battery_callback,
             ("motion.deltaY", "int16_t"),
             ("stateEstimate.z", "float"),
             ("range.zrange", "uint16_t"),
+            ("kalman.stateX", "float"),
+            ("kalman.stateY", "float"),
+            ("kalman.stateZ", "float"),
         ]
         added_motion = []
         for var_name, var_type in motion_variables:
