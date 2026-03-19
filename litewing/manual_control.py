@@ -43,8 +43,9 @@ def run_manual_control(drone):
     try:
         # Initial comandante/param check (already done in arm(), but ensure here for safety)
         if not drone.debug_mode:
-            cf.commander.send_setpoint(0, 0, 0, 0)
-            time.sleep(0.1)
+            if drone.position_hold_mode != "firmware":
+                cf.commander.send_setpoint(0, 0, 0, 0)
+                time.sleep(0.1)
 
         # === TAKEOFF ===
         drone._flight_phase = "MANUAL_TAKEOFF"
@@ -277,7 +278,10 @@ def run_manual_control(drone):
             time.sleep(0.02)
 
         if not drone.debug_mode:
-            cf.commander.send_setpoint(0, 0, 0, 0)
+            if drone.position_hold_mode == "firmware":
+                cf.high_level_commander.stop()
+            else:
+                cf.commander.send_setpoint(0, 0, 0, 0)
 
         drone._flight_phase = "MANUAL_COMPLETE"
         if drone._logger_fn:
@@ -289,7 +293,10 @@ def run_manual_control(drone):
             drone._logger_fn(f"Manual control error: {str(e)}")
         try:
             if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
+                if drone.position_hold_mode == "firmware":
+                    cf.high_level_commander.stop()
+                else:
+                    cf.commander.send_setpoint(0, 0, 0, 0)
         except Exception:
             pass
     finally:

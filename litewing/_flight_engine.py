@@ -101,8 +101,9 @@ def run_flight_sequence(drone, maneuver_fn=None):
 
             # Initialize commander
             if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
-                time.sleep(0.1)
+                if drone.position_hold_mode != "firmware":
+                    cf.commander.send_setpoint(0, 0, 0, 0)
+                    time.sleep(0.1)
                 cf.param.set_value("commander.enHighLevel", "1")
                 time.sleep(0.5)
 
@@ -311,7 +312,10 @@ def run_flight_sequence(drone, maneuver_fn=None):
         # Try to stop motors
         try:
             if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
+                if drone.position_hold_mode == "firmware":
+                    cf.high_level_commander.stop()
+                else:
+                    cf.commander.send_setpoint(0, 0, 0, 0)
         except Exception:
             pass
     finally:

@@ -340,7 +340,10 @@ class LiteWing:
             self._flight_active = False
             if self._scf and not self.debug_mode:
                 try:
-                    self._scf.cf.commander.send_setpoint(0, 0, 0, 0)
+                    if self.position_hold_mode == "firmware":
+                        self._scf.cf.high_level_commander.stop()
+                    else:
+                        self._scf.cf.commander.send_setpoint(0, 0, 0, 0)
                 except Exception:
                     pass
 
