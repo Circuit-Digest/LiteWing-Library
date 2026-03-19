@@ -9,7 +9,8 @@ import time
 from .config import defaults
 from ._safety import check_link_safety, check_battery_safe
 from ._connection import (
-    setup_sensor_logging, apply_firmware_parameters, stop_logging_configs
+    setup_sensor_logging, apply_firmware_parameters, stop_logging_configs,
+    setup_debug_wrappers
 )
 
 
@@ -28,6 +29,7 @@ def run_flight_sequence(drone, maneuver_fn=None):
 
     cflib.crtp.init_drivers()
     cf = Crazyflie(rw_cache="./cache")
+    setup_debug_wrappers(cf, logger_fn=drone._logger_fn)
     log_motion = None
     log_battery = None
 

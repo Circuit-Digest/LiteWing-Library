@@ -36,6 +36,13 @@ def send_crtp_with_fallback(cf, port, channel, payload: bytes):
     Send a CRTP packet, trying multiple methods for compatibility.
     Raises RuntimeError if no method works.
     """
+    if getattr(defaults, "DEBUG_PRINT_MODE", False):
+        try:
+            payload_str = tuple(payload)
+        except Exception:
+            payload_str = payload
+        print(f"[DEBUG CMD] CRTP Packet - Port: 0x{port:02X}, Channel: 0x{channel:02X}, Payload: {payload_str}")
+
     header = ((port & 0x0F) << 4) | (channel & 0x0F)
     pkt = _PacketObj(header, payload)
 

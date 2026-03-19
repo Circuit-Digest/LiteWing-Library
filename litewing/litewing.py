@@ -233,7 +233,7 @@ class LiteWing:
         import cflib.crtp
         from cflib.crazyflie import Crazyflie
         from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
-        from ._connection import setup_sensor_logging
+        from ._connection import setup_sensor_logging, setup_debug_wrappers
 
         cflib.crtp.init_drivers()
         uri = f"udp://{self._ip}:{self._port}"
@@ -246,6 +246,7 @@ class LiteWing:
         last_error = None
         for attempt in range(3):
             cf = Crazyflie(rw_cache="./cache")
+            setup_debug_wrappers(cf, logger_fn=self._logger_fn)
             self._cf_instance = cf
             self._sync_cf = SyncCrazyflie(uri, cf=cf)
 
@@ -480,6 +481,15 @@ class LiteWing:
         """Current phase: IDLE, CONNECTING, TAKEOFF, HOVERING, LANDING, etc."""
         return self._flight_phase
 
+    @property
+    def debug_print_mode(self):
+        """If True, prints every command sent to the drone."""
+        return defaults.DEBUG_PRINT_MODE
+
+    @debug_print_mode.setter
+    def debug_print_mode(self, value):
+        defaults.DEBUG_PRINT_MODE = bool(value)
+
     # === Sensor Access ===
 
     def read_sensors(self):
@@ -546,18 +556,13 @@ class LiteWing:
                 # Firmware mode: match Position.py exactly
                 # DO NOT send send_setpoint — it activates Port 0x07 commander
                 # which conflicts with Port 0x08 high-level commander
-                if self._logger_fn:
-                    self._logger_fn("[CMD] param.set_value('commander.enHighLevel', '1')")
                 cf.param.set_value("commander.enHighLevel", "1")
                 time.sleep(0.1)
 
                 if self._logger_fn:
                     self._logger_fn("Resetting EKF position to origin...")
-                    self._logger_fn("[CMD] param.set_value('kalman.resetEstimation', '1')")
                 cf.param.set_value("kalman.resetEstimation", "1")
                 time.sleep(0.1)
-                if self._logger_fn:
-                    self._logger_fn("[CMD] param.set_value('kalman.resetEstimation', '0')")
                 cf.param.set_value("kalman.resetEstimation", "0")
                 time.sleep(2)  # Wait for EKF to converge
             else:
@@ -572,7 +577,7 @@ class LiteWing:
         self._position_hold.reset()
 
         if self._logger_fn:
-            self._logger_fn(f"Drone armed and ready! (mode={self.position_hold_mode})")
+            self._logger_fn(f"Drone armed and ready!")
 
     def takeoff(self, height=None, duration=None):
         """
@@ -607,11 +612,6 @@ class LiteWing:
         if self.position_hold_mode == "firmware":
             # Use high-level commander takeoff (Port 0x08)
             # yaw=None → firmware sets useCurrentYaw=True automatically
-            if self._logger_fn:
-                self._logger_fn(
-                    f"[CMD] high_level_commander.takeoff("
-                    f"height={self.target_height}, duration={dur}, yaw=None)"
-                )
             cf.high_level_commander.takeoff(self.target_height, dur, yaw=None)
             self._cmd_height = self.target_height
 
@@ -623,8 +623,6 @@ class LiteWing:
 
             # Post-takeoff stabilisation (firmware holds position)
             self._flight_phase = "HOVERING"
-            if self._logger_fn:
-                self._logger_fn("[CMD] (firmware holding position autonomously)")
             t0 = time.time()
             while time.time() - t0 < 1.0 and self._flight_active:
                 self._log_csv_if_active()
@@ -717,11 +715,6 @@ class LiteWing:
 
         # ── FIRMWARE MODE ─────────────────────────────────────────
         if self.position_hold_mode == "firmware":
-            if self._logger_fn:
-                self._logger_fn(
-                    f"[CMD] high_level_commander.land("
-                    f"height=0.0, duration={dur}, yaw=None)"
-                )
             cf.high_level_commander.land(0.0, dur, yaw=None)
 
             t0 = time.time()
@@ -730,8 +723,6 @@ class LiteWing:
                 time.sleep(0.1)
 
             if not self.debug_mode:
-                if self._logger_fn:
-                    self._logger_fn("[CMD] high_level_commander.stop()")
                 cf.high_level_commander.stop()
 
             self._flight_active = False

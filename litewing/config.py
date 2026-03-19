@@ -36,6 +36,8 @@ class _Defaults:
     # === DEBUG & SAFETY ===
     # Set True to disable motors (sensors and logging still work)
     DEBUG_MODE = False
+    # Set True to print every command sent to the drone (navigation, LEDs, etc.)
+    DEBUG_PRINT_MODE = True
     # Set True to enable emergency stop if height sensor seems stuck during takeoff
     ENABLE_HEIGHT_SENSOR_SAFETY = False
     # Minimum height change expected during takeoff (meters)

@@ -11,6 +11,38 @@ Log groups (each limited to ~26 bytes per CRTP packet):
 
 import time
 from cflib.crazyflie.log import LogConfig
+from .config import defaults
+
+def setup_debug_wrappers(cf, logger_fn=None):
+    """
+    Wrap Crazyflie command methods to log commands when DEBUG_PRINT_MODE is enabled.
+    """
+    def make_debug_wrapper(original_fn, name):
+        def wrapper(*args, **kwargs):
+            if getattr(defaults, 'DEBUG_PRINT_MODE', False):
+                args_str = ", ".join(repr(a) for a in args)
+                kwargs_str = ", ".join(f"{k}={repr(v)}" for k, v in kwargs.items())
+                all_args = ", ".join(filter(None, [args_str, kwargs_str]))
+                msg = f"[DEBUG CMD] {name}({all_args})"
+                if logger_fn:
+                    logger_fn(msg)
+                else:
+                    print(msg)
+            return original_fn(*args, **kwargs)
+        return wrapper
+
+    if getattr(cf, 'commander', None):
+        cf.commander.send_setpoint = make_debug_wrapper(cf.commander.send_setpoint, "commander.send_setpoint")
+        cf.commander.send_hover_setpoint = make_debug_wrapper(cf.commander.send_hover_setpoint, "commander.send_hover_setpoint")
+
+    if getattr(cf, 'high_level_commander', None):
+        cf.high_level_commander.takeoff = make_debug_wrapper(cf.high_level_commander.takeoff, "high_level_commander.takeoff")
+        cf.high_level_commander.land = make_debug_wrapper(cf.high_level_commander.land, "high_level_commander.land")
+        cf.high_level_commander.stop = make_debug_wrapper(cf.high_level_commander.stop, "high_level_commander.stop")
+        cf.high_level_commander.go_to = make_debug_wrapper(cf.high_level_commander.go_to, "high_level_commander.go_to")
+
+    if getattr(cf, 'param', None):
+        cf.param.set_value = make_debug_wrapper(cf.param.set_value, "param.set_value")
 
 
 def setup_sensor_logging(cf, motion_callback, battery_callback,
