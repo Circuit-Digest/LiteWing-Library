@@ -140,6 +140,7 @@ class LiteWing:
         # Joystick / manual control
         self.sensitivity = defaults.JOYSTICK_SENSITIVITY
         self.hold_mode = defaults.JOYSTICK_HOLD_MODE
+        self.commander_mode = defaults.COMMANDER_MODE
         self.momentum_compensation_time = defaults.MOMENTUM_COMPENSATION_TIME
         self.settling_duration = defaults.SETTLING_DURATION
         self.settling_correction_factor = defaults.SETTLING_CORRECTION_FACTOR

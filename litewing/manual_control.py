@@ -66,29 +66,36 @@ def run_manual_control(drone):
                 drone._manual_active = False
                 break
             if not drone.debug_mode:
-                if (has_pos_hold and drone._sensors.sensor_data_ready and
-                        drone._sensors.height > 0.05 and 
-                        drone.position_hold_mode != "firmware"):
-                    mvx, mvy = drone._position_hold.calculate_corrections(
-                        drone._position_engine.x, drone._position_engine.y,
-                        drone._position_engine.vx, drone._position_engine.vy,
-                        drone._sensors.height, True, current_yaw=drone._sensors.yaw
-                    )
+                if drone.enable_takeoff_ramp:
+                    # Smooth height ramp
+                    elapsed = time.time() - takeoff_start
+                    progress = min(1.0, elapsed / drone.takeoff_time)
+                    cmd_height = round(takeoff_height_start + (
+                        drone.target_height - takeoff_height_start
+                    ) * progress, 2)
                 else:
-                    mvx, mvy = 0.0, 0.0
-                total_vx = drone.hover_trim_pitch + mvx
-                total_vy = drone.hover_trim_roll + mvy
-                
-                # Smooth height ramp
-                elapsed = time.time() - takeoff_start
-                progress = min(1.0, elapsed / drone.takeoff_time)
-                cmd_height = takeoff_height_start + (
-                    drone.target_height - takeoff_height_start
-                ) * progress
+                    # No ramp — go straight to target height
+                    cmd_height = drone.target_height
 
-                cf.commander.send_hover_setpoint(
-                    total_vx, total_vy, 0, cmd_height
-                )
+                if drone.position_hold_mode == "firmware" and drone.commander_mode == "position":
+                    # Position mode: lock XY at origin while ramping Z
+                    cf.commander.send_position_setpoint(0.0, 0.0, cmd_height, 0.0)
+                else:
+                    if (has_pos_hold and drone._sensors.sensor_data_ready and
+                            drone._sensors.height > 0.05 and 
+                            drone.position_hold_mode != "firmware"):
+                        mvx, mvy = drone._position_hold.calculate_corrections(
+                            drone._position_engine.x, drone._position_engine.y,
+                            drone._position_engine.vx, drone._position_engine.vy,
+                            drone._sensors.height, True, current_yaw=drone._sensors.yaw
+                        )
+                    else:
+                        mvx, mvy = 0.0, 0.0
+                    total_vx = drone.hover_trim_pitch + mvx
+                    total_vy = drone.hover_trim_roll + mvy
+                    cf.commander.send_hover_setpoint(
+                        total_vx, total_vy, 0, cmd_height
+                    )
             _log_csv_row(drone)
             time.sleep(0.01)
 
@@ -101,21 +108,24 @@ def run_manual_control(drone):
                                     drone.debug_mode, drone._logger_fn):
                 drone._manual_active = False
                 break
-            if (has_pos_hold and drone._sensors.sensor_data_ready and 
-                    drone.position_hold_mode != "firmware"):
-                mvx, mvy = drone._position_hold.calculate_corrections(
-                    drone._position_engine.x, drone._position_engine.y,
-                    drone._position_engine.vx, drone._position_engine.vy,
-                    drone._sensors.height, True
-                )
-            else:
-                mvx, mvy = 0.0, 0.0
-            total_vx = drone.hover_trim_pitch + mvx
-            total_vy = drone.hover_trim_roll + mvy
             if not drone.debug_mode:
-                cf.commander.send_hover_setpoint(
-                    total_vx, total_vy, 0, drone.target_height
-                )
+                if drone.position_hold_mode == "firmware" and drone.commander_mode == "position":
+                    cf.commander.send_position_setpoint(0.0, 0.0, drone.target_height, 0.0)
+                else:
+                    if (has_pos_hold and drone._sensors.sensor_data_ready and 
+                            drone.position_hold_mode != "firmware"):
+                        mvx, mvy = drone._position_hold.calculate_corrections(
+                            drone._position_engine.x, drone._position_engine.y,
+                            drone._position_engine.vx, drone._position_engine.vy,
+                            drone._sensors.height, True
+                        )
+                    else:
+                        mvx, mvy = 0.0, 0.0
+                    total_vx = drone.hover_trim_pitch + mvx
+                    total_vy = drone.hover_trim_roll + mvy
+                    cf.commander.send_hover_setpoint(
+                        total_vx, total_vy, 0, drone.target_height
+                    )
             time.sleep(drone.control_update_rate)
 
         # === MANUAL CONTROL LOOP ===
@@ -171,6 +181,11 @@ def run_manual_control(drone):
 
         last_loop_time = time.time()
 
+        # Position-mode navigation state (for commander_mode == "position")
+        nav_x = drone._sensors.kalman_x if drone._sensors.sensor_data_ready else 0.0
+        nav_y = drone._sensors.kalman_y if drone._sensors.sensor_data_ready else 0.0
+        nav_yaw = drone._sensors.yaw if drone._sensors.sensor_data_ready else 0.0
+
         while drone._manual_active:
             if not check_link_safety(cf, drone._sensors.sensor_data_ready and drone.position_hold_mode != "firmware",
                                     drone._sensors.last_sensor_heartbeat,
@@ -225,18 +240,35 @@ def run_manual_control(drone):
             drone.target_height = round(drone.target_height, 2)
 
             if drone.position_hold_mode == "firmware":
-                if joystick_active or drone.hold_mode != "origin":
-                    # Send hover setpoints for active flight OR if user wants to 'stay here' (test theory)
-                    if not drone.debug_mode:
-                        cf.commander.send_hover_setpoint(
-                            joystick_vx, joystick_vy, joystick_yaw, drone.target_height
-                        )
-                else:
-                    # Sticks released AND hold_mode == "origin" -> lock onto takeoff spot natively
+                if drone.commander_mode == "position":
+                    # === POSITION MODE: accumulate target coordinates ===
+                    if joystick_active:
+                        nav_x += joystick_vx * dt
+                        nav_y += joystick_vy * dt
+                        nav_yaw += joystick_yaw * dt
+                    elif drone.hold_mode == "origin":
+                        # Snap back to takeoff origin when idle
+                        nav_x, nav_y, nav_yaw = 0.0, 0.0, 0.0
+                    # else: hold_mode == "current" — nav stays locked at last position
+
                     if not drone.debug_mode:
                         cf.commander.send_position_setpoint(
-                            0.0, 0.0, drone.target_height, 0.0
+                            round(nav_x, 2), round(nav_y, 2),
+                            drone.target_height, round(nav_yaw, 2)
                         )
+                else:
+                    # === HOVER MODE: send velocity commands ===
+                    if joystick_active or drone.hold_mode != "origin":
+                        if not drone.debug_mode:
+                            cf.commander.send_hover_setpoint(
+                                joystick_vx, joystick_vy, joystick_yaw, drone.target_height
+                            )
+                    else:
+                        # Sticks released AND hold_mode == "origin" -> lock onto takeoff spot
+                        if not drone.debug_mode:
+                            cf.commander.send_position_setpoint(
+                                0.0, 0.0, drone.target_height, 0.0
+                            )
             else:
                 # Update target position based on hold mode (Library PID)
                 if has_pos_hold and drone._sensors.sensor_data_ready:
@@ -291,11 +323,14 @@ def run_manual_control(drone):
         current_land_height = drone.target_height
         dt = 0.02  # 50Hz control loop
 
-        # Calculate maximum possible time to land to prevent infinite loops (plus a 1s margin)
-        # Gradual descent: lower target height smoothly with position hold
-        # Capture the landing position from EKF so we lock onto it
+        # Capture the landing position so we lock onto it during descent
         if drone.position_hold_mode == "firmware":
-            if drone.hold_mode == "origin":
+            if drone.commander_mode == "position":
+                # Use the tracked nav position (already precise)
+                land_x, land_y, land_yaw = round(nav_x, 2), round(nav_y, 2), round(nav_yaw, 2)
+                if drone.hold_mode == "origin":
+                    land_x, land_y, land_yaw = 0.0, 0.0, 0.0
+            elif drone.hold_mode == "origin":
                 land_x, land_y, land_yaw = 0.0, 0.0, 0.0
             else:
                 land_x = round(drone._sensors.kalman_x, 2)
