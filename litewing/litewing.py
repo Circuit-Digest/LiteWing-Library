@@ -1105,7 +1105,7 @@ class LiteWing:
             x: Target X position in meters.
             y: Target Y position in meters.
             z: Target Z (height) in meters (default: target_height).
-            yaw: Target yaw in radians for firmware / degrees for library.
+            yaw: Target yaw in degrees.
             speed: Flight speed in m/s (default: default_flight_speed).
             threshold: How close is "close enough" (meters).
         """
@@ -1128,6 +1128,7 @@ class LiteWing:
             cur_x = self._sensors.kalman_x
             cur_y = self._sensors.kalman_y
             cur_z = self._sensors.kalman_z
+            cur_yaw = self._sensors.yaw  # in degrees
 
             dx = x - cur_x
             dy = y - cur_y
@@ -1135,17 +1136,30 @@ class LiteWing:
             distance = math.sqrt(dx**2 + dy**2 + dz**2)
 
             spd = min(speed, self.max_flight_speed)
-            dur = max(distance / spd, 0.5)
+            lin_dur = distance / spd
 
-            # Use current yaw if not specified
-            yaw_rad = yaw if yaw is not None else 0.0
+            if yaw is not None:
+                target_yaw_deg = yaw
+                yaw_str = f", yaw={yaw}°"
+            else:
+                target_yaw_deg = 0.0
+                yaw_str = ""
+
+            # Calculate yaw duration (assuming 90 deg/sec comfortable rotation)
+            yaw_diff = abs(target_yaw_deg - cur_yaw) % 360
+            shortest_yaw_diff = min(yaw_diff, 360 - yaw_diff)
+            yaw_dur = shortest_yaw_diff / 90.0
+            
+            target_yaw_rad = math.radians(target_yaw_deg)
+
+            dur = max(lin_dur, yaw_dur, 0.5)
 
             if self._logger_fn:
                 self._logger_fn(
-                    f"Flying to ({x:.2f}, {y:.2f}, {z:.2f}) in {dur:.1f}s"
+                    f"Flying to ({x:.2f}, {y:.2f}, {z:.2f}{yaw_str}) in {dur:.1f}s"
                 )
 
-            cf.high_level_commander.go_to(x, y, z, yaw_rad, dur, relative=False)
+            cf.high_level_commander.go_to(x, y, z, target_yaw_rad, dur, relative=False)
 
             t0 = time.time()
             while time.time() - t0 < dur + 0.5 and self._flight_active:

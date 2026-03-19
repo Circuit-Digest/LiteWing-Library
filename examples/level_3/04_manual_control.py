@@ -29,7 +29,7 @@ with LiteWing("192.168.43.42") as drone:
     # ── Manual control settings ──────────────────────────
 
     # How fast the drone responds to key input
-    drone.sensitivity = 0.2  # Default: 0.2 (m/s per key)
+    drone.sensitivity = 0.7  # Default: 0.2 (m/s per key)
 
     # What happens when you release all keys?
     drone.hold_mode = "current"  # "current" = stay here, "origin" = go back
