@@ -90,8 +90,6 @@ class LiteWing:
 
         # Flight parameters
         self.target_height = defaults.TARGET_HEIGHT
-        self.takeoff_time = defaults.TAKEOFF_TIME
-        self.landing_time = defaults.LANDING_TIME
         self.descent_rate = defaults.DESCENT_RATE
         self.hover_duration = defaults.HOVER_DURATION
         self.enable_takeoff_ramp = defaults.ENABLE_TAKEOFF_RAMP
@@ -201,6 +199,11 @@ class LiteWing:
 
             signal.signal(signal.SIGINT, _ctrl_c_handler)
 
+            # Space key safe landing (runs in a background thread)
+            self._land_key_thread = None
+            self._land_key_active = False
+            self._start_land_key_listener()
+
     # === Context Manager (with statement) ===
 
     def __enter__(self):
@@ -209,6 +212,71 @@ class LiteWing:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
         return False
+
+    # === Space Key Safe Landing ===
+
+    def _start_land_key_listener(self):
+        """
+        Start a background thread that listens for the space key.
+        When pressed, triggers a safe landing (not emergency stop).
+        """
+        import threading
+
+        if self._land_key_active:
+            return
+
+        self._land_key_active = True
+
+        def _listener():
+            try:
+                import msvcrt  # Windows only
+                while self._land_key_active:
+                    if msvcrt.kbhit():
+                        key = msvcrt.getch()
+                        if key == b' ':  # space key
+                            if self._flight_active:
+                                print("\n [SPACE] Safe landing triggered!")
+                                # Run land() in a separate thread to avoid blocking
+                                threading.Thread(
+                                    target=self._safe_land_from_key,
+                                    daemon=True
+                                ).start()
+                    time.sleep(0.05)
+            except ImportError:
+                # Non-Windows: try termios-based approach
+                try:
+                    import sys, tty, termios, select
+                    fd = sys.stdin.fileno()
+                    old = termios.tcgetattr(fd)
+                    try:
+                        tty.setcbreak(fd)
+                        while self._land_key_active:
+                            if select.select([sys.stdin], [], [], 0.05)[0]:
+                                ch = sys.stdin.read(1)
+                                if ch == ' ' and self._flight_active:
+                                    print("\n [SPACE] Safe landing triggered!")
+                                    threading.Thread(
+                                        target=self._safe_land_from_key,
+                                        daemon=True
+                                    ).start()
+                    finally:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                except Exception:
+                    pass  # no keyboard available (e.g. headless)
+
+        self._land_key_thread = threading.Thread(
+            target=_listener, daemon=True, name="LiteWing-LandKey"
+        )
+        self._land_key_thread.start()
+
+    def _safe_land_from_key(self):
+        """Called when space key is pressed — performs a normal land()."""
+        try:
+            self.land()
+        except Exception as e:
+            if self._logger_fn:
+                self._logger_fn(f"Land-key error: {e}")
+            self.emergency_stop()
 
     # === Connection ===
 
@@ -365,9 +433,8 @@ class LiteWing:
         except Exception:
             pass
 
-        # Detach LEDs
+        # Detach LEDs (do NOT clear — preserves error notification state)
         try:
-            self._leds.clear()
             self._leds.detach()
         except Exception:
             pass
@@ -640,7 +707,7 @@ class LiteWing:
         takeoff_start = time.time()
         takeoff_height_start = self._sensors.height
 
-        while (time.time() - takeoff_start < self.takeoff_time and
+        while (time.time() - takeoff_start < dur and
                self._flight_active):
             if not self.debug_mode:
                 if (self._sensors.sensor_data_ready and
@@ -658,7 +725,7 @@ class LiteWing:
 
                 if self.enable_takeoff_ramp:
                     elapsed = time.time() - takeoff_start
-                    progress = min(1.0, elapsed / self.takeoff_time)
+                    progress = min(1.0, elapsed / dur)
                     cmd_height = takeoff_height_start + (
                         self.target_height - takeoff_height_start
                     ) * progress
@@ -745,7 +812,7 @@ class LiteWing:
         dt = 0.02
 
         while (current_land_height > 0.02 and
-               time.time() - land_start < self.landing_time and
+               time.time() - land_start < dur and
                self._flight_active):
             current_land_height -= self.descent_rate * dt
             current_land_height = max(current_land_height, 0.0)
@@ -802,7 +869,7 @@ class LiteWing:
                 self._cf_instance.commander.send_setpoint(0, 0, 0, 0)
             except Exception:
                 pass
-        self._leds.clear()
+        # NOTE: Do NOT clear LEDs here — preserves error notification state
 
     # === Raw Control (no sensors needed) ===
 

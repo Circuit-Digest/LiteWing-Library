@@ -24,12 +24,8 @@ class _Defaults:
     # === FLIGHT PARAMETERS ===
     # Target hover height in meters (0.3m = 30cm above ground)
     TARGET_HEIGHT = 0.3
-    # Time in seconds for the takeoff ramp
-    TAKEOFF_TIME = 0.2
     # How long to hover by default (seconds)
     HOVER_DURATION = 20.0
-    # Time in seconds for the landing descent (safety timeout)
-    LANDING_TIME = 3.0
     # Descent rate in m/s for gradual landing (0.3 = 30cm per second)
     DESCENT_RATE = 0.25
 
@@ -43,7 +39,7 @@ class _Defaults:
     # Minimum height change expected during takeoff (meters)
     HEIGHT_SENSOR_MIN_CHANGE = 0.005
     # Low battery warning threshold in volts (LEDs blink red)
-    LOW_BATTERY_THRESHOLD = 3.3
+    LOW_BATTERY_THRESHOLD = 3.0
     # Critical battery threshold in volts (auto-land triggered)
     CRITICAL_BATTERY_THRESHOLD = 2.8
     # Max allowed time between sensor packets before declaring timeout (seconds)

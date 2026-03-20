@@ -20,14 +20,14 @@ from litewing import LiteWing
 drone = LiteWing("192.168.43.42")
 
 # ── Configure before flight ──────────────────────────
-drone.target_height = 0.9    # Hover at 30cm (keep it low for first tests!)
+drone.target_height = 0.3    # Hover at 30cm (keep it low for first tests!)
 drone.hover_duration = 30.0   # Hover for 3 seconds
-drone.debug_mode = False
+
 
 # ── Connect ──────────────────────────────────────────
 drone.connect()
 drone.clear_leds()
-time.sleep(2)
+time.sleep(1)
 # plot = drone.start_dashboard()
 # Pre-flight check
 # print(f"Battery: {drone.battery:.2f}V")
@@ -38,7 +38,8 @@ time.sleep(2)
 
 # ── LED indicator: ready to fly ──────────────────────
 drone.set_led_color(0, 255, 0)  # Green = ready
-time.sleep(1)
+time.sleep()
+
 # ── Fly! ─────────────────────────────────────────────
 print("Arming...")
 drone.arm()
@@ -64,6 +65,7 @@ print(f"Hovering for {drone.hover_duration}s...")
 #         time.sleep(1.0)
 
 # threading.Thread(target=_print_sensors, args=(drone.hover_duration,), daemon=True).start()
+
 drone.hover(drone.hover_duration)  # position-hold loop runs here
 
 print("Landing...")
@@ -73,5 +75,6 @@ drone.land()
 # drone.clear_leds()
 # plot.stop(save_path="my_flight_plot.png")
 # drone.stop_logging()
+
 drone.disconnect()
 print("Flight complete!")

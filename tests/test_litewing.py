@@ -341,3 +341,112 @@ class TestShapeFunctions:
         sig = inspect.signature(self.drone.circle)
         params = list(sig.parameters.keys())
         assert params[0] == 'diameter'
+
+
+class TestConfigDefaults:
+    """Verify all default config values are applied correctly."""
+
+    def setup_method(self):
+        from litewing import LiteWing
+        self.drone = LiteWing(install_signal_handler=False)
+        self.drone.debug_mode = True
+
+    # ── Flight parameter defaults ────────────────────────────────
+
+    def test_default_takeoff_duration(self):
+        assert self.drone.default_takeoff_duration == 0.1
+
+    def test_default_landing_duration(self):
+        assert self.drone.default_landing_duration == 2.0
+
+    def test_target_height(self):
+        assert self.drone.target_height == 0.3
+
+    def test_default_flight_speed(self):
+        assert self.drone.default_flight_speed == 0.7
+
+    def test_max_flight_speed(self):
+        assert self.drone.max_flight_speed == 2
+
+    def test_enable_takeoff_ramp(self):
+        assert self.drone.enable_takeoff_ramp is False
+
+    def test_descent_rate(self):
+        assert self.drone.descent_rate == 0.25
+
+    def test_hover_duration(self):
+        assert self.drone.hover_duration == 20.0
+
+    def test_position_hold_mode(self):
+        assert self.drone.position_hold_mode == "firmware"
+
+
+class TestConfigModifiable:
+    """Verify config parameters can be modified at runtime."""
+
+    def setup_method(self):
+        from litewing import LiteWing
+        self.drone = LiteWing(install_signal_handler=False)
+        self.drone.debug_mode = True
+
+    # ── Runtime modification ─────────────────────────────────────
+
+    def test_modify_takeoff_duration(self):
+        self.drone.default_takeoff_duration = 1.5
+        assert self.drone.default_takeoff_duration == 1.5
+
+    def test_modify_landing_duration(self):
+        self.drone.default_landing_duration = 3.0
+        assert self.drone.default_landing_duration == 3.0
+
+    def test_modify_target_height(self):
+        self.drone.target_height = 0.5
+        assert self.drone.target_height == 0.5
+
+    def test_modify_flight_speed(self):
+        self.drone.default_flight_speed = 1.0
+        assert self.drone.default_flight_speed == 1.0
+
+    def test_modify_enable_ramp(self):
+        self.drone.enable_takeoff_ramp = True
+        assert self.drone.enable_takeoff_ramp is True
+
+    # ── API signature checks ─────────────────────────────────────
+
+    def test_takeoff_signature(self):
+        """takeoff(height, duration) — first param is height, not duration."""
+        import inspect
+        sig = inspect.signature(self.drone.takeoff)
+        params = list(sig.parameters.keys())
+        assert params[0] == 'height'
+        assert params[1] == 'duration'
+        assert sig.parameters['height'].default is None
+        assert sig.parameters['duration'].default is None
+
+    def test_land_signature(self):
+        """land(duration) — first param is duration."""
+        import inspect
+        sig = inspect.signature(self.drone.land)
+        params = list(sig.parameters.keys())
+        assert params[0] == 'duration'
+        assert sig.parameters['duration'].default is None
+
+    # ── LED clear NOT in emergency stop or disconnect ────────────
+
+    def test_emergency_stop_no_led_clear(self):
+        """emergency_stop() must NOT call _leds.clear()."""
+        import inspect
+        src = inspect.getsource(self.drone.emergency_stop)
+        assert "_leds.clear" not in src
+
+    def test_disconnect_no_led_clear(self):
+        """disconnect() must NOT call _leds.clear()."""
+        import inspect
+        src = inspect.getsource(self.drone.disconnect)
+        assert "_leds.clear" not in src
+
+    # ── Space key safe landing ───────────────────────────────────
+
+    def test_safe_land_method_exists(self):
+        assert hasattr(self.drone, '_safe_land_from_key')
+        assert callable(self.drone._safe_land_from_key)
