@@ -58,7 +58,7 @@ def run_manual_control(drone):
         takeoff_start = time.time()
         takeoff_height_start = drone._sensors.height
 
-        while (time.time() - takeoff_start < drone.takeoff_time and
+        while (time.time() - takeoff_start < drone.default_takeoff_duration and
                drone._manual_active):
             if not check_link_safety(cf, drone._sensors.sensor_data_ready and drone.position_hold_mode != "firmware",
                                     drone._sensors.last_sensor_heartbeat,
@@ -69,7 +69,7 @@ def run_manual_control(drone):
                 if drone.enable_takeoff_ramp:
                     # Smooth height ramp
                     elapsed = time.time() - takeoff_start
-                    progress = min(1.0, elapsed / drone.takeoff_time)
+                    progress = min(1.0, elapsed / drone.default_takeoff_duration)
                     cmd_height = round(takeoff_height_start + (
                         drone.target_height - takeoff_height_start
                     ) * progress, 2)
