@@ -6,8 +6,7 @@ Fly a square pattern using movement commands.
 What you'll learn:
     - forward(), backward(), left(), right()
     - Combining movements into a pattern
-    - The fly() helper for safe automated flights
-
+   
  SAFETY: Make sure you have at least 2m × 2m of clear space!
 """
 

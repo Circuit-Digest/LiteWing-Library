@@ -10,9 +10,12 @@ What you'll learn:
     - Stopping manual control safely
 
 Controls:
-    W = Forward    S = Backward
-    A = Left       D = Right
-    SPACE or Q = Land and stop
+    W = Forward        S = Backward
+    A = Left           D = Right
+    Q = Rotate Left    E = Rotate Right
+    R = Up             F = Down
+    SPACE = Land and stop
+    Ctrl + C = Emergency stop
 
 Hold modes:
     "current" — release keys → hold at current position (free flight)

@@ -634,11 +634,11 @@ class LiteWing:
                 time.sleep(0.1)
 
                 if self._logger_fn:
-                    self._logger_fn("Resetting EKF position to origin...")
+                    self._logger_fn("Resetting position to origin...")
                 cf.param.set_value("kalman.resetEstimation", "1")
                 time.sleep(0.1)
                 cf.param.set_value("kalman.resetEstimation", "0")
-                time.sleep(2)  # Wait for EKF to converge
+                time.sleep(1)  # Wait for position to converge
             else:
                 # Library mode: unlock commander with zero setpoint
                 cf.commander.send_setpoint(0, 0, 0, 0)
@@ -1014,7 +1014,7 @@ class LiteWing:
         """
         if distance is None:
             distance = self.maneuver_distance
-        self._execute_movement(0.0, distance, speed)
+        self._execute_movement(distance, 0.0, speed)
 
     def pitch_backward(self, distance=None, speed=0.2):
         """
@@ -1026,7 +1026,7 @@ class LiteWing:
         """
         if distance is None:
             distance = self.maneuver_distance
-        self._execute_movement(0.0, -distance, speed)
+        self._execute_movement(-distance, 0.0, speed)
 
     def roll_left(self, distance=None, speed=0.2):
         """
@@ -1038,7 +1038,7 @@ class LiteWing:
         """
         if distance is None:
             distance = self.maneuver_distance
-        self._execute_movement(distance, 0.0, speed)
+        self._execute_movement(0.0, distance, speed)
 
     def roll_right(self, distance=None, speed=0.2):
         """
@@ -1050,7 +1050,7 @@ class LiteWing:
         """
         if distance is None:
             distance = self.maneuver_distance
-        self._execute_movement(-distance, 0.0, speed)
+        self._execute_movement(0.0, -distance, speed)
 
     def _execute_movement(self, dx, dy, speed):
         """
@@ -1339,7 +1339,7 @@ class LiteWing:
         # ── Reset EKF so current hover position becomes origin (0,0) ──
         if not self.debug_mode and self.position_hold_mode == "firmware":
             if self._logger_fn:
-                self._logger_fn("Resetting EKF — current position becomes origin...")
+                self._logger_fn("Resetting — current position becomes origin...")
             cf.param.set_value("kalman.resetEstimation", "1")
             time.sleep(0.1)
             cf.param.set_value("kalman.resetEstimation", "0")
@@ -1513,7 +1513,7 @@ class LiteWing:
         # ── Reset EKF so current hover position becomes origin (0,0) ──
         if not self.debug_mode and self.position_hold_mode == "firmware":
             if self._logger_fn:
-                self._logger_fn("Resetting EKF — current position becomes origin...")
+                self._logger_fn("Resetting — current position becomes origin...")
             cf.param.set_value("kalman.resetEstimation", "1")
             time.sleep(0.1)
             cf.param.set_value("kalman.resetEstimation", "0")

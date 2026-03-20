@@ -1,5 +1,5 @@
 """
-Level 3 — Position Hold Configuration
+Level 3 — Position Hold Configuration [Legacy]
 ========================================
 Fine-tune how the drone holds its position.
 

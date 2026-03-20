@@ -107,14 +107,14 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 cf.param.set_value("commander.enHighLevel", "1")
                 time.sleep(0.5)
 
-                # Firmware mode: reset EKF so position starts at (0,0,0)
+                # Firmware mode: reset position starts at (0,0,0)
                 if drone.position_hold_mode == "firmware":
                     if drone._logger_fn:
-                        drone._logger_fn("Resetting EKF position to origin...")
+                        drone._logger_fn("Resetting position to origin...")
                     cf.param.set_value("kalman.resetEstimation", "1")
                     time.sleep(0.1)
                     cf.param.set_value("kalman.resetEstimation", "0")
-                    time.sleep(2)
+                    time.sleep(1)
             else:
                 if drone._logger_fn:
                     drone._logger_fn("DEBUG MODE: Skipping flight initialization")
