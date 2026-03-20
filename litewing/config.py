@@ -24,24 +24,22 @@ class _Defaults:
     # === FLIGHT PARAMETERS ===
     # Target hover height in meters (0.3m = 30cm above ground)
     TARGET_HEIGHT = 0.3
-    # Time in seconds for the takeoff ramp
-    TAKEOFF_TIME = 1.0
     # How long to hover by default (seconds)
     HOVER_DURATION = 20.0
-    # Time in seconds for the landing descent (safety timeout)
-    LANDING_TIME = 2.0
     # Descent rate in m/s for gradual landing (0.3 = 30cm per second)
-    DESCENT_RATE = 0.2
+    DESCENT_RATE = 0.25
 
     # === DEBUG & SAFETY ===
     # Set True to disable motors (sensors and logging still work)
     DEBUG_MODE = False
+    # Set True to print every command sent to the drone (navigation, LEDs, etc.)
+    DEBUG_PRINT_MODE = False
     # Set True to enable emergency stop if height sensor seems stuck during takeoff
     ENABLE_HEIGHT_SENSOR_SAFETY = False
     # Minimum height change expected during takeoff (meters)
     HEIGHT_SENSOR_MIN_CHANGE = 0.005
     # Low battery warning threshold in volts (LEDs blink red)
-    LOW_BATTERY_THRESHOLD = 3.3
+    LOW_BATTERY_THRESHOLD = 3.0
     # Critical battery threshold in volts (auto-land triggered)
     CRITICAL_BATTERY_THRESHOLD = 2.8
     # Max allowed time between sensor packets before declaring timeout (seconds)
@@ -116,6 +114,10 @@ class _Defaults:
     JOYSTICK_SENSITIVITY = 0.2
     # "current" = hold at wherever you stop, "origin" = snap back to launch
     JOYSTICK_HOLD_MODE = "current"
+        # Commander mode for WASD navigation:
+    #   "hover"    — velocity via send_hover_setpoint (responsive, may drift)
+    #   "position" — coordinates via send_position_setpoint (drift-free)
+    COMMANDER_MODE = "position"
 
     # === MOMENTUM COMPENSATION ===
     # When keys are released, predicts stopping position to prevent overshoot
@@ -131,6 +133,17 @@ class _Defaults:
     FW_THRUST_BASE = 24000    # Base motor thrust (increase if drone feels heavy)
     FW_Z_POS_KP = 1.6         # Height position gain
     FW_Z_VEL_KP = 15.0        # Vertical velocity damping (stop height bouncing)
+
+    # === POSITION HOLD MODE ===
+    # "firmware" — Position hold on-drone [DEFAULT]
+    # "library"  — Position hold in Python [LEGACY]
+    POSITION_HOLD_MODE = "firmware"
+
+    # === FIRMWARE FLIGHT DEFAULTS ===
+    DEFAULT_TAKEOFF_DURATION = 0.1   # seconds
+    DEFAULT_LANDING_DURATION = 2.0   # seconds
+    DEFAULT_FLIGHT_SPEED = 0.7       # m/s
+    MAX_FLIGHT_SPEED = 2           # m/s (safety clamp)
 
     # === CSV LOGGING ===
     # Set True to automatically create CSV log files

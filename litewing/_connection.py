@@ -11,6 +11,46 @@ Log groups (each limited to ~26 bytes per CRTP packet):
 
 import time
 from cflib.crazyflie.log import LogConfig
+from .config import defaults
+
+def setup_debug_wrappers(cf, logger_fn=None):
+    """
+    Wrap Crazyflie command methods to log commands when DEBUG_PRINT_MODE is enabled.
+    """
+    def make_debug_wrapper(original_fn, name):
+        def wrapper(*args, **kwargs):
+            if getattr(defaults, 'DEBUG_PRINT_MODE', False):
+                args_str = ", ".join(repr(a) for a in args)
+                kwargs_str = ", ".join(f"{k}={repr(v)}" for k, v in kwargs.items())
+                all_args = ", ".join(filter(None, [args_str, kwargs_str]))
+                msg = f"[DEBUG CMD] {name}({all_args})"
+                if logger_fn:
+                    logger_fn(msg)
+                else:
+                    print(msg)
+            return original_fn(*args, **kwargs)
+        return wrapper
+
+    if getattr(cf, 'commander', None):
+        for cmd in [
+            'send_setpoint', 'send_hover_setpoint', 'send_position_setpoint',
+            'send_velocity_world_setpoint', 'send_zdistance_setpoint',
+            'send_stop_setpoint', 'send_alt_hold_setpoint', 'send_full_state_setpoint'
+        ]:
+            if hasattr(cf.commander, cmd):
+                setattr(cf.commander, cmd, make_debug_wrapper(getattr(cf.commander, cmd), f"commander.{cmd}"))
+
+    if getattr(cf, 'high_level_commander', None):
+        for cmd in [
+            'takeoff', 'land', 'stop', 'go_to', 'set_group_mask',
+            'start_trajectory', 'define_trajectory',
+            'takeoff_with_velocity', 'land_with_velocity'
+        ]:
+            if hasattr(cf.high_level_commander, cmd):
+                setattr(cf.high_level_commander, cmd, make_debug_wrapper(getattr(cf.high_level_commander, cmd), f"high_level_commander.{cmd}"))
+
+    if getattr(cf, 'param', None):
+        cf.param.set_value = make_debug_wrapper(cf.param.set_value, "param.set_value")
 
 
 def setup_sensor_logging(cf, motion_callback, battery_callback,
@@ -44,6 +84,9 @@ def setup_sensor_logging(cf, motion_callback, battery_callback,
             ("motion.deltaY", "int16_t"),
             ("stateEstimate.z", "float"),
             ("range.zrange", "uint16_t"),
+            ("kalman.stateX", "float"),
+            ("kalman.stateY", "float"),
+            ("kalman.stateZ", "float"),
         ]
         added_motion = []
         for var_name, var_type in motion_variables:

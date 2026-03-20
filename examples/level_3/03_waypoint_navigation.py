@@ -36,11 +36,11 @@ drone.takeoff()
 print("\n--- fly_to: Triangle pattern ---")
 
 # Fly forward
-drone.fly_to(0.3, 0.0, speed=0.25)    # +X = forward
+drone.fly_to(0.6, 0.0, speed=0.25)    # +X = forward
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
 
 # Fly forward-left (corner)
-drone.fly_to(0.3, 0.3, speed=0.25)    # +X forward, +Y left
+drone.fly_to(0.6, 0.6, speed=0.25)    # +X forward, +Y left
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
 
 # Move Diagonal Right-Backward (back to origin)

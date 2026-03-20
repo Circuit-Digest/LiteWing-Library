@@ -90,8 +90,6 @@ class LiteWing:
 
         # Flight parameters
         self.target_height = defaults.TARGET_HEIGHT
-        self.takeoff_time = defaults.TAKEOFF_TIME
-        self.landing_time = defaults.LANDING_TIME
         self.descent_rate = defaults.DESCENT_RATE
         self.hover_duration = defaults.HOVER_DURATION
         self.enable_takeoff_ramp = defaults.ENABLE_TAKEOFF_RAMP
@@ -140,10 +138,14 @@ class LiteWing:
         # Joystick / manual control
         self.sensitivity = defaults.JOYSTICK_SENSITIVITY
         self.hold_mode = defaults.JOYSTICK_HOLD_MODE
+        self.commander_mode = defaults.COMMANDER_MODE
         self.momentum_compensation_time = defaults.MOMENTUM_COMPENSATION_TIME
         self.settling_duration = defaults.SETTLING_DURATION
         self.settling_correction_factor = defaults.SETTLING_CORRECTION_FACTOR
-        self._manual_keys = {"w": False, "s": False, "a": False, "d": False}
+        self._manual_keys = {
+            "w": False, "s": False, "a": False, "d": False,
+            "q": False, "e": False, "r": False, "f": False
+        }
 
         # Firmware parameters
         self.enable_firmware_params = defaults.ENABLE_FIRMWARE_PARAMS
@@ -160,6 +162,15 @@ class LiteWing:
         self.waypoint_threshold = defaults.MANEUVER_THRESHOLD
         self.waypoint_stabilization_time = defaults.WAYPOINT_STABILIZATION_TIME
         self.maneuver_distance = defaults.MANEUVER_DISTANCE
+
+        # Position hold mode (firmware or library)
+        self.position_hold_mode = defaults.POSITION_HOLD_MODE
+
+        # Firmware flight defaults
+        self.default_takeoff_duration = defaults.DEFAULT_TAKEOFF_DURATION
+        self.default_landing_duration = defaults.DEFAULT_LANDING_DURATION
+        self.default_flight_speed = defaults.DEFAULT_FLIGHT_SPEED
+        self.max_flight_speed = defaults.MAX_FLIGHT_SPEED
 
         # === Internal state (hidden from learners) ===
         self._position_cfg_proxy = _PositionConfigProxy(self)
@@ -188,6 +199,11 @@ class LiteWing:
 
             signal.signal(signal.SIGINT, _ctrl_c_handler)
 
+            # Space key safe landing (runs in a background thread)
+            self._land_key_thread = None
+            self._land_key_active = False
+            self._start_land_key_listener()
+
     # === Context Manager (with statement) ===
 
     def __enter__(self):
@@ -196,6 +212,71 @@ class LiteWing:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.disconnect()
         return False
+
+    # === Space Key Safe Landing ===
+
+    def _start_land_key_listener(self):
+        """
+        Start a background thread that listens for the space key.
+        When pressed, triggers a safe landing (not emergency stop).
+        """
+        import threading
+
+        if self._land_key_active:
+            return
+
+        self._land_key_active = True
+
+        def _listener():
+            try:
+                import msvcrt  # Windows only
+                while self._land_key_active:
+                    if msvcrt.kbhit():
+                        key = msvcrt.getch()
+                        if key == b' ':  # space key
+                            if self._flight_active:
+                                print("\n [SPACE] Safe landing triggered!")
+                                # Run land() in a separate thread to avoid blocking
+                                threading.Thread(
+                                    target=self._safe_land_from_key,
+                                    daemon=True
+                                ).start()
+                    time.sleep(0.05)
+            except ImportError:
+                # Non-Windows: try termios-based approach
+                try:
+                    import sys, tty, termios, select
+                    fd = sys.stdin.fileno()
+                    old = termios.tcgetattr(fd)
+                    try:
+                        tty.setcbreak(fd)
+                        while self._land_key_active:
+                            if select.select([sys.stdin], [], [], 0.05)[0]:
+                                ch = sys.stdin.read(1)
+                                if ch == ' ' and self._flight_active:
+                                    print("\n [SPACE] Safe landing triggered!")
+                                    threading.Thread(
+                                        target=self._safe_land_from_key,
+                                        daemon=True
+                                    ).start()
+                    finally:
+                        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+                except Exception:
+                    pass  # no keyboard available (e.g. headless)
+
+        self._land_key_thread = threading.Thread(
+            target=_listener, daemon=True, name="LiteWing-LandKey"
+        )
+        self._land_key_thread.start()
+
+    def _safe_land_from_key(self):
+        """Called when space key is pressed — performs a normal land()."""
+        try:
+            self.land()
+        except Exception as e:
+            if self._logger_fn:
+                self._logger_fn(f"Land-key error: {e}")
+            self.emergency_stop()
 
     # === Connection ===
 
@@ -224,7 +305,7 @@ class LiteWing:
         import cflib.crtp
         from cflib.crazyflie import Crazyflie
         from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
-        from ._connection import setup_sensor_logging
+        from ._connection import setup_sensor_logging, setup_debug_wrappers
 
         cflib.crtp.init_drivers()
         uri = f"udp://{self._ip}:{self._port}"
@@ -237,6 +318,7 @@ class LiteWing:
         last_error = None
         for attempt in range(3):
             cf = Crazyflie(rw_cache="./cache")
+            setup_debug_wrappers(cf, logger_fn=self._logger_fn)
             self._cf_instance = cf
             self._sync_cf = SyncCrazyflie(uri, cf=cf)
 
@@ -330,7 +412,10 @@ class LiteWing:
             self._flight_active = False
             if self._scf and not self.debug_mode:
                 try:
-                    self._scf.cf.commander.send_setpoint(0, 0, 0, 0)
+                    if self.position_hold_mode == "firmware":
+                        self._scf.cf.high_level_commander.stop()
+                    else:
+                        self._scf.cf.commander.send_setpoint(0, 0, 0, 0)
                 except Exception:
                     pass
 
@@ -348,9 +433,8 @@ class LiteWing:
         except Exception:
             pass
 
-        # Detach LEDs
+        # Detach LEDs (do NOT clear — preserves error notification state)
         try:
-            self._leds.clear()
             self._leds.detach()
         except Exception:
             pass
@@ -471,6 +555,15 @@ class LiteWing:
         """Current phase: IDLE, CONNECTING, TAKEOFF, HOVERING, LANDING, etc."""
         return self._flight_phase
 
+    @property
+    def debug_print_mode(self):
+        """If True, prints every command sent to the drone."""
+        return defaults.DEBUG_PRINT_MODE
+
+    @debug_print_mode.setter
+    def debug_print_mode(self, value):
+        defaults.DEBUG_PRINT_MODE = bool(value)
+
     # === Sensor Access ===
 
     def read_sensors(self):
@@ -533,19 +626,34 @@ class LiteWing:
 
         cf = self._cf_instance
         if not self.debug_mode:
-            cf.commander.send_setpoint(0, 0, 0, 0)
-            time.sleep(0.1)
-            cf.param.set_value("commander.enHighLevel", "1")
-            time.sleep(0.5)
+            if self.position_hold_mode == "firmware":
+                # Firmware mode: match Position.py exactly
+                # DO NOT send send_setpoint — it activates Port 0x07 commander
+                # which conflicts with Port 0x08 high-level commander
+                cf.param.set_value("commander.enHighLevel", "1")
+                time.sleep(0.1)
+
+                if self._logger_fn:
+                    self._logger_fn("Resetting EKF position to origin...")
+                cf.param.set_value("kalman.resetEstimation", "1")
+                time.sleep(0.1)
+                cf.param.set_value("kalman.resetEstimation", "0")
+                time.sleep(2)  # Wait for EKF to converge
+            else:
+                # Library mode: unlock commander with zero setpoint
+                cf.commander.send_setpoint(0, 0, 0, 0)
+                time.sleep(0.1)
+                cf.param.set_value("commander.enHighLevel", "1")
+                time.sleep(0.5)
 
         self._flight_active = True
         self._position_engine.reset()
         self._position_hold.reset()
 
         if self._logger_fn:
-            self._logger_fn("Drone armed and ready!")
+            self._logger_fn(f"Drone armed and ready!")
 
-    def takeoff(self, height=None, speed=None):
+    def takeoff(self, height=None, duration=None):
         """
         Take off and hover at the specified height.
 
@@ -554,7 +662,7 @@ class LiteWing:
 
         Args:
             height: Target height in meters (default: drone.target_height).
-            speed: Not used yet, reserved for future takeoff speed control.
+            duration: Time in seconds for takeoff (default: drone.default_takeoff_duration).
         """
         if self._scf is None:
             raise RuntimeError("Not connected! Call connect() first.")
@@ -564,22 +672,44 @@ class LiteWing:
         if height is not None:
             self.target_height = height
 
+        dur = duration if duration is not None else self.default_takeoff_duration
         cf = self._cf_instance
         self._flight_phase = "TAKEOFF"
         if self._logger_fn:
-            self._logger_fn(f"Taking off to {self.target_height}m...")
+            self._logger_fn(f"Taking off to {self.target_height}m in {dur}s...")
 
         # Start CSV logging if enabled
         if self.enable_csv_logging and not self._flight_logger.is_logging:
             self._flight_logger.start(logger=self._logger_fn)
 
+        # ── FIRMWARE MODE ─────────────────────────────────────────
+        if self.position_hold_mode == "firmware":
+            # Use high-level commander takeoff (Port 0x08)
+            # yaw=None → firmware sets useCurrentYaw=True automatically
+            cf.high_level_commander.takeoff(self.target_height, dur, yaw=None)
+            self._cmd_height = self.target_height
+
+            # Wait for takeoff trajectory to complete
+            t0 = time.time()
+            while time.time() - t0 < dur and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+
+            # Post-takeoff stabilisation (firmware holds position)
+            self._flight_phase = "HOVERING"
+            t0 = time.time()
+            while time.time() - t0 < 1.0 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # ── LIBRARY MODE (legacy Port 0x07) ───────────────────────
         takeoff_start = time.time()
         takeoff_height_start = self._sensors.height
 
-        while (time.time() - takeoff_start < self.takeoff_time and
+        while (time.time() - takeoff_start < dur and
                self._flight_active):
             if not self.debug_mode:
-                # Position hold during takeoff if height is sufficient
                 if (self._sensors.sensor_data_ready and
                         self._sensors.height > 0.04):
                     mvx, mvy = self._position_hold.calculate_corrections(
@@ -593,10 +723,9 @@ class LiteWing:
                 total_vx = self.hover_trim_pitch + mvx
                 total_vy = self.hover_trim_roll + mvy
 
-                # Takeoff ramp
                 if self.enable_takeoff_ramp:
                     elapsed = time.time() - takeoff_start
-                    progress = min(1.0, elapsed / self.takeoff_time)
+                    progress = min(1.0, elapsed / dur)
                     cmd_height = takeoff_height_start + (
                         self.target_height - takeoff_height_start
                     ) * progress
@@ -641,34 +770,54 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
-    def land(self):
+    def land(self, duration=None):
         """
         Land the drone safely.
 
-        Descends to ground and stops motors.
+        Args:
+            duration: Time in seconds for landing (default: drone.default_landing_duration).
         """
         if self._scf is None or not self._flight_active:
             self._flight_active = False
             return
 
+        dur = duration if duration is not None else self.default_landing_duration
         cf = self._cf_instance
         self._flight_phase = "LANDING"
         if self._logger_fn:
-            self._logger_fn("Landing...")
+            self._logger_fn(f"Landing over {dur}s...")
 
+        # ── FIRMWARE MODE ─────────────────────────────────────────
+        if self.position_hold_mode == "firmware":
+            cf.high_level_commander.land(0.0, dur, yaw=None)
+
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+
+            if not self.debug_mode:
+                cf.high_level_commander.stop()
+
+            self._flight_active = False
+            self._flight_phase = "IDLE"
+            self._flight_logger.stop(logger=self._logger_fn)
+            if self._logger_fn:
+                self._logger_fn("Landed!")
+            return
+
+        # ── LIBRARY MODE (legacy Port 0x07) ───────────────────────
         land_start = time.time()
         current_land_height = self.target_height
-        dt = 0.02  # 50Hz control loop
+        dt = 0.02
 
-        # Gradual descent: lower target height smoothly with position hold
         while (current_land_height > 0.02 and
-               time.time() - land_start < self.landing_time and
+               time.time() - land_start < dur and
                self._flight_active):
             current_land_height -= self.descent_rate * dt
             current_land_height = max(current_land_height, 0.0)
             self._cmd_height = current_land_height
 
-            # Keep position hold active during descent
             if self._sensors.sensor_data_ready and current_land_height > 0.03:
                 mvx, mvy = self._position_hold.calculate_corrections(
                     self._position_engine.x, self._position_engine.y,
@@ -688,7 +837,6 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(dt)
 
-        # Brief settle at ground level before killing motors
         settle_start = time.time()
         while time.time() - settle_start < 0.3 and self._flight_active:
             if not self.debug_mode:
@@ -697,14 +845,11 @@ class LiteWing:
                 )
             time.sleep(0.02)
 
-        # Stop motors
         if not self.debug_mode:
             cf.commander.send_setpoint(0, 0, 0, 0)
 
         self._flight_active = False
         self._flight_phase = "IDLE"
-
-        # Stop CSV logging
         self._flight_logger.stop(logger=self._logger_fn)
 
         if self._logger_fn:
@@ -724,7 +869,7 @@ class LiteWing:
                 self._cf_instance.commander.send_setpoint(0, 0, 0, 0)
             except Exception:
                 pass
-        self._leds.clear()
+        # NOTE: Do NOT clear LEDs here — preserves error notification state
 
     # === Raw Control (no sensors needed) ===
 
@@ -767,21 +912,22 @@ class LiteWing:
         """
         Hover in place for the specified duration.
 
-        Actively maintains position hold while waiting.
+        In firmware mode, the high-level commander holds position autonomously.
+        In library mode, actively streams hold setpoints.
 
         Args:
             seconds: How long to hover in seconds.
         """
         if self._scf is None or not self._flight_active:
-            # Not in flight — just sleep
             time.sleep(seconds)
             return
 
         cf = self._cf_instance
         start = time.time()
         _low_bat_warned = False
+
         while (time.time() - start < seconds and self._flight_active):
-            # Battery safety check
+            # Battery safety check (applies to both modes)
             voltage = self._sensors.battery_voltage
             if voltage > 0:
                 if voltage < defaults.CRITICAL_BATTERY_THRESHOLD:
@@ -808,20 +954,26 @@ class LiteWing:
                     except Exception:
                         pass
 
-            if not self.debug_mode:
-                if self._sensors.sensor_data_ready:
-                    mvx, mvy = self._position_hold.calculate_corrections(
-                        self._position_engine.x, self._position_engine.y,
-                        self._position_engine.vx, self._position_engine.vy,
-                        self._sensors.height, True, current_yaw=self._sensors.yaw
+            if self.position_hold_mode == "firmware":
+                # Firmware holds position autonomously — no commands needed
+                pass
+            else:
+                # Library mode: stream hover setpoints via Port 0x07
+                if not self.debug_mode:
+                    if self._sensors.sensor_data_ready:
+                        mvx, mvy = self._position_hold.calculate_corrections(
+                            self._position_engine.x, self._position_engine.y,
+                            self._position_engine.vx, self._position_engine.vy,
+                            self._sensors.height, True, current_yaw=self._sensors.yaw
+                        )
+                    else:
+                        mvx, mvy = 0.0, 0.0
+                    cf.commander.send_hover_setpoint(
+                        self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
+                        0, self.target_height
                     )
-                else:
-                    mvx, mvy = 0.0, 0.0
-                cf.commander.send_hover_setpoint(
-                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
-                    0, self.target_height
-                )
-                self._cmd_height = self.target_height
+                    self._cmd_height = self.target_height
+
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
@@ -902,14 +1054,10 @@ class LiteWing:
 
     def _execute_movement(self, dx, dy, speed):
         """
-        Execute a relative movement using position hold.
+        Execute a relative movement.
 
-        This is a BLOCKING call — it sets the position hold target to the
-        new position and runs a hover loop until the drone arrives (within
-        waypoint_threshold) or times out (waypoint_timeout).
-
-        The `speed` parameter controls the maximum velocity (m/s) by
-        overriding max_correction in the PID controller.
+        In firmware mode, uses high_level_commander go_to (relative).
+        In library mode, uses PID + send_hover_setpoint.
         """
         if self._scf is None or not self._flight_active:
             if self._logger_fn:
@@ -917,10 +1065,28 @@ class LiteWing:
             return
 
         cf = self._cf_instance
+
+        if self.position_hold_mode == "firmware":
+            import math
+            distance = math.sqrt(dx**2 + dy**2)
+            spd = min(speed, self.max_flight_speed)
+            dur = max(distance / spd, 0.5)
+
+            if self._logger_fn:
+                self._logger_fn(
+                    f"Moving by ({dx:.2f}, {dy:.2f}) in {dur:.1f}s"
+                )
+
+            cf.high_level_commander.go_to(round(dx, 2), round(dy, 2), 0, 0, round(dur, 2), relative=True)
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # Library mode
         target_x = self._position_engine.x + dx
         target_y = self._position_engine.y + dy
-
-        # Set position hold target to the new position
         self._position_hold.set_target(target_x, target_y)
 
         if self._logger_fn:
@@ -929,14 +1095,11 @@ class LiteWing:
                 f"at {speed:.1f} m/s"
             )
 
-        # Use speed as the velocity clamp (max_correction)
         move_max_correction = min(speed, self.max_correction)
 
         start = time.time()
         while (time.time() - start < self.waypoint_timeout and
                self._flight_active):
-
-            # Check if we've reached the target
             dist = ((self._position_engine.x - target_x) ** 2 +
                     (self._position_engine.y - target_y) ** 2) ** 0.5
             if dist < self.waypoint_threshold:
@@ -1002,17 +1165,19 @@ class LiteWing:
 
     # === Advanced Flight (Tier 3) ===
 
-    def fly_to(self, x, y, speed=0.3, threshold=None):
+    def fly_to(self, x, y, z=None, yaw=None, speed=None, threshold=None):
         """
-        Fly to an absolute position (x, y) using position hold.
+        Fly to an absolute position.
 
-        This is a BLOCKING call — it returns when the drone reaches
-        the target (within threshold) or times out.
+        In firmware mode, uses high_level_commander go_to.
+        In library mode, uses PID + send_hover_setpoint.
 
         Args:
             x: Target X position in meters.
             y: Target Y position in meters.
-            speed: Maximum velocity setpoint (m/s).
+            z: Target Z (height) in meters (default: target_height).
+            yaw: Target yaw in degrees.
+            speed: Flight speed in m/s (default: default_flight_speed).
             threshold: How close is "close enough" (meters).
         """
         if self._scf is None or not self._flight_active:
@@ -1021,8 +1186,59 @@ class LiteWing:
             return
         if threshold is None:
             threshold = self.waypoint_threshold
+        if z is None:
+            z = self.target_height
+        if speed is None:
+            speed = self.default_flight_speed
 
         cf = self._cf_instance
+
+        if self.position_hold_mode == "firmware":
+            import math
+            # Get current position from EKF
+            cur_x = self._sensors.kalman_x
+            cur_y = self._sensors.kalman_y
+            cur_z = self._sensors.kalman_z
+            cur_yaw = self._sensors.yaw  # in degrees
+
+            dx = x - cur_x
+            dy = y - cur_y
+            dz = z - cur_z
+            distance = math.sqrt(dx**2 + dy**2 + dz**2)
+
+            spd = min(speed, self.max_flight_speed)
+            lin_dur = distance / spd
+
+            if yaw is not None:
+                target_yaw_deg = yaw
+                yaw_str = f", yaw={yaw}°"
+            else:
+                target_yaw_deg = 0.0
+                yaw_str = ""
+
+            # Calculate yaw duration (assuming 90 deg/sec comfortable rotation)
+            yaw_diff = abs(target_yaw_deg - cur_yaw) % 360
+            shortest_yaw_diff = min(yaw_diff, 360 - yaw_diff)
+            yaw_dur = shortest_yaw_diff / 90.0
+            
+            target_yaw_rad = math.radians(target_yaw_deg)
+
+            dur = max(lin_dur, yaw_dur, 0.5)
+
+            if self._logger_fn:
+                self._logger_fn(
+                    f"Flying to ({x:.2f}, {y:.2f}, {z:.2f}{yaw_str}) in {dur:.1f}s"
+                )
+
+            cf.high_level_commander.go_to(round(x, 2), round(y, 2), round(z, 2), round(target_yaw_rad, 4), round(dur, 2), relative=False)
+
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.5 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # Library mode
         self._position_hold.set_target(x, y)
 
         if self._logger_fn:
@@ -1072,26 +1288,337 @@ class LiteWing:
             self._log_csv_if_active()
             time.sleep(self.control_update_rate)
 
-    def fly_path(self, waypoints, speed=0.3, threshold=None):
+    def fly_path(self, waypoints, speed=None, threshold=None):
         """
-        Fly through a sequence of (x, y) waypoints.
+        Fly through a sequence of waypoints.
 
-        This is a BLOCKING call — it returns when all waypoints have
-        been reached or a timeout occurs.
+        Accepts flexible tuples: (x,y), (x,y,z), or (x,y,z,yaw).
 
         Args:
-            waypoints: List of (x, y) tuples.
-            speed: Maximum velocity setpoint (m/s).
+            waypoints: List of tuples.
+            speed: Flight speed in m/s.
             threshold: How close is "close enough" (meters).
         """
         if threshold is None:
             threshold = self.waypoint_threshold
-        for i, (x, y) in enumerate(waypoints):
+        if speed is None:
+            speed = self.default_flight_speed
+
+        for i, wp in enumerate(waypoints):
             if not self._flight_active:
                 break
+            x, y = wp[0], wp[1]
+            z = wp[2] if len(wp) > 2 else None
+            yaw = wp[3] if len(wp) > 3 else None
             if self._logger_fn:
                 self._logger_fn(f"Waypoint {i + 1}/{len(waypoints)}")
-            self.fly_to(x, y, speed=speed, threshold=threshold)
+            self.fly_to(x, y, z=z, yaw=yaw, speed=speed, threshold=threshold)
+
+    # === Shape Paths (Tier 3) ===
+
+    def _fly_shape_path(self, offsets, duration, face_direction):
+        """
+        Internal helper — fly through a list of (x, y) offsets from the
+        drone's current position, then return to the starting point.
+
+        Args:
+            offsets:        List of (x, y) tuples relative to start position.
+            duration:       Total time budget for the whole shape (seconds).
+            face_direction: If True, rotate drone nose toward the next waypoint
+                            before/during each leg. If False, keep current yaw.
+        """
+        import math
+
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot fly shape — not in flight!")
+            return
+
+        cf = self._cf_instance
+
+        # ── Reset EKF so current hover position becomes origin (0,0) ──
+        if not self.debug_mode and self.position_hold_mode == "firmware":
+            if self._logger_fn:
+                self._logger_fn("Resetting EKF — current position becomes origin...")
+            cf.param.set_value("kalman.resetEstimation", "1")
+            time.sleep(0.1)
+            cf.param.set_value("kalman.resetEstimation", "0")
+            time.sleep(0.2)  # wait for EKF to re-converge
+
+            # Set yaw to 0° (face forward) before starting shape
+            if self._logger_fn:
+                self._logger_fn("Setting yaw=0° (face forward) before shape...")
+            cf.high_level_commander.go_to(0, 0, self.target_height, 0, 1.0, relative=False)
+            time.sleep(1.5)
+
+        # After EKF reset, origin is always (0, 0)
+        origin_x = 0.0
+        origin_y = 0.0
+
+        # Build absolute waypoint list: all offsets + return-to-origin
+        abs_waypoints = [(origin_x + dx, origin_y + dy) for dx, dy in offsets]
+        abs_waypoints.append((origin_x, origin_y))  # final: return to start
+
+        # Speed calculation — spread the time budget across all legs evenly
+        # fly_to() in firmware mode waits (dur + 0.5s) per call,
+        # so we subtract that overhead to hit the requested total duration.
+        n_legs = len(abs_waypoints)
+        FLY_TO_OVERHEAD = 0.5  # seconds of stabilization in fly_to()
+        time_per_leg = duration / n_legs
+        effective_fly_time = max(time_per_leg - FLY_TO_OVERHEAD, 0.3)
+
+        # Iterate through waypoints
+        prev_x, prev_y = origin_x, origin_y
+        for i, (tx, ty) in enumerate(abs_waypoints):
+            if not self._flight_active:
+                break
+
+            dx = tx - prev_x
+            dy = ty - prev_y
+            seg_len = math.sqrt(dx * dx + dy * dy)
+
+            # Yaw toward the next point's direction (normalized to 0°–360°)
+            if face_direction and seg_len > 0.001:
+                yaw_deg = math.degrees(math.atan2(dy, dx)) % 360.0
+            else:
+                yaw_deg = None
+
+            # Speed = distance / effective flight time (excluding overhead)
+            speed = seg_len / effective_fly_time if effective_fly_time > 0 else self.default_flight_speed
+            speed = max(0.05, min(speed, self.max_flight_speed))
+
+            if self._logger_fn:
+                yaw_str = f", yaw={yaw_deg:.0f}°" if yaw_deg is not None else ""
+                self._logger_fn(
+                    f"  Shape leg {i + 1}/{n_legs}: "
+                    f"({tx:.2f}, {ty:.2f}){yaw_str} at {speed:.2f} m/s"
+                )
+
+            self.fly_to(tx, ty, yaw=yaw_deg, speed=speed)
+
+            prev_x, prev_y = tx, ty
+
+    def square(self, length, duration, face_direction=True):
+        """
+        Fly a square path starting from the current position.
+
+        Path: origin → forward → forward-left → left → back to origin.
+        Each side is exactly `length` meters. 4 legs total.
+
+        Args:
+            length:         Side length of the square in meters.
+            duration:       Total time to complete the full square (seconds).
+            face_direction: If True, drone nose faces the direction of travel
+                            at each corner turn. If False, heading is unchanged.
+
+        Example:
+            drone.square(0.6, 10)           # 0.6m square, 10 seconds
+            drone.square(0.8, 12, False)    # 0.8m square, fixed heading
+        """
+        L = length
+        # Forward → Left → Back → Origin (4 equal-length sides)
+        #   (0,0) → (L,0) → (L,L) → (0,L) → (0,0)
+        offsets = [
+            (L, 0.0),      # forward
+            (L, L),         # forward-left corner
+            (0.0, L),       # left
+        ]                   # return to (0,0) is added by _fly_shape_path
+        if self._logger_fn:
+            self._logger_fn(
+                f"Square: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
+
+    def triangle(self, length, duration, face_direction=True):
+        """
+        Fly an equilateral triangle path starting from the current position.
+
+        Path: origin → forward → forward-left → back to origin.
+        Each side is exactly `length` meters. 3 legs total.
+
+        Args:
+            length:         Side length of the triangle in meters.
+            duration:       Total time to complete the full triangle (seconds).
+            face_direction: If True, drone nose faces the direction of travel.
+                            If False, heading is unchanged.
+
+        Example:
+            drone.triangle(0.6, 8)          # 0.6m triangle, 8 seconds
+            drone.triangle(0.5, 10, False)  # fixed heading
+        """
+        import math
+        L = length
+        # Equilateral triangle: first side along +X (forward), then 120° turn
+        #   (0,0) → (L,0) → (L/2, L*√3/2) → (0,0)
+        # offsets = [
+        #     (L, 0.0),                                       # forward
+        #     (L / 2.0, L * math.sqrt(3.0) / 2.0),            # forward-left
+        # ]  # return to (0,0) added by _fly_shape_path
+
+        # Left hand triangle
+        offsets = [
+            (L, 0.0),                                       # forward
+            (0.0, L),                                       # left-back
+        ]  # return to (0,0) added by _fly_shape_path
+        if self._logger_fn:
+            self._logger_fn(
+                f"Triangle: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
+
+    def circle(self, diameter, duration, face_direction=True):
+        """
+        Fly a smooth circular path centered on the current position.
+
+        The number of waypoints is automatically calculated so the arc
+        spacing is ≤ 0.05 m, giving a smooth circle regardless of size.
+
+        Unlike polygon shapes, circle sends go_to commands directly
+        (not through fly_to) for continuous smooth motion without
+        stabilization pauses between waypoints.
+
+        Args:
+            diameter:       Diameter of the circle in meters.
+            duration:       Total time to complete one full loop (seconds).
+            face_direction: If True, drone nose faces the tangent direction
+                            (always pointing the way it's flying).
+                            If False, heading is unchanged.
+
+        Example:
+            drone.circle(1.0, 15)           # 1m diameter circle, 15 seconds
+            drone.circle(0.5, 8, False)     # no yaw rotation
+        """
+        import math
+        radius = diameter / 2.0
+        circumference = math.pi * diameter
+
+        # Dynamic waypoint count for smooth arc (≤ 0.05 m per step, min 12)
+        n = max(12, int(math.ceil(circumference / 0.05)))
+
+        if self._logger_fn:
+            self._logger_fn(
+                f"Circle: diameter={diameter}m, duration={duration}s, "
+                f"n_waypoints={n}, face_direction={face_direction}"
+            )
+
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot fly circle — not in flight!")
+            return
+
+        cf = self._cf_instance
+
+        # ── Reset EKF so current hover position becomes origin (0,0) ──
+        if not self.debug_mode and self.position_hold_mode == "firmware":
+            if self._logger_fn:
+                self._logger_fn("Resetting EKF — current position becomes origin...")
+            cf.param.set_value("kalman.resetEstimation", "1")
+            time.sleep(0.1)
+            cf.param.set_value("kalman.resetEstimation", "0")
+            time.sleep(0.2)
+
+        # ── Smooth lead-in: origin → circle edge → rotate to tangent ──
+        # Step 1: Face forward at origin (yaw=0°)
+        # Step 2: Fly straight out to (radius, 0) — the circle start point
+        # Step 3: Rotate yaw to 90° (tangent direction at angle=0)
+        # This prevents the jerk from jumping directly into circular motion.
+        if not self.debug_mode:
+            if self._logger_fn:
+                self._logger_fn("Lead-in: moving to circle edge...")
+            # Face forward at origin
+            cf.high_level_commander.go_to(0, 0, self.target_height, 0, 1.0, relative=False)
+            time.sleep(1.0)
+            # Fly to circle edge (radius, 0)
+            cf.high_level_commander.go_to(radius, 0, self.target_height, 0, 2.0, relative=False)
+            time.sleep(2.5)
+            # Rotate to tangent direction (90° = π/2 rad) at circle start
+            if face_direction:
+                if self._logger_fn:
+                    self._logger_fn("Lead-in: rotating to tangent yaw (90°)...")
+                cf.high_level_commander.go_to(radius, 0, self.target_height, round(math.pi / 2.0, 2), 1.5, relative=False)
+                time.sleep(2.0)
+
+        # ── Trace the circle by sending go_to directly (like Position.py) ──
+        # Each waypoint gets an equal time slice — no stabilization pauses,
+        # so the drone moves continuously along the arc.
+        time_per_wp = duration / n
+        height = self.target_height
+
+        for i in range(1, n + 1):
+            if not self._flight_active:
+                break
+
+            angle = (2.0 * math.pi * i) / n
+            x = round(radius * math.cos(angle), 2)
+            y = round(radius * math.sin(angle), 2)
+
+            # Tangent direction: angle + 90° (normalized to 0°–360°)
+            if face_direction:
+                yaw_rad = round(angle + math.pi / 2.0, 2)
+            else:
+                yaw_rad = 0.0
+
+            if self._logger_fn:
+                yaw_deg = math.degrees(yaw_rad) % 360.0
+                self._logger_fn(
+                    f"  Circle wp {i}/{n}: ({x}, {y}), "
+                    f"yaw={yaw_deg:.0f}°, dur={time_per_wp:.2f}s"
+                )
+
+            if not self.debug_mode:
+                cf.high_level_commander.go_to(
+                    x, y, height, yaw_rad,
+                    round(time_per_wp, 2), relative=False
+                )
+
+            self._log_csv_if_active()
+            time.sleep(time_per_wp)
+
+        if self._logger_fn:
+            self._logger_fn("Circle complete!")
+
+    def pentagon(self, length, duration, face_direction=True):
+        """
+        Fly a regular pentagon path starting from the current position.
+
+        The drone walks along 5 equal-length sides and returns to origin.
+        Each side is exactly `length` meters. 5 legs total.
+
+        Args:
+            length:         Side length of the pentagon in meters.
+            duration:       Total time to complete the full pentagon (seconds).
+            face_direction: If True, drone nose faces the direction of travel.
+                            If False, heading is unchanged.
+
+        Example:
+            drone.pentagon(0.6, 12)         # 0.6m pentagon, 12 seconds
+            drone.pentagon(0.8, 15, False)  # fixed heading
+        """
+        import math
+        L = length
+        n_sides = 5
+        ext_angle = 2.0 * math.pi / n_sides  # 72° exterior angle
+
+        # Walk the edges using turtle-graphics:
+        # Start at origin heading 0° (+X), turn left 72° at each vertex
+        heading = 0.0
+        cx, cy = 0.0, 0.0
+        offsets = []
+        for _ in range(n_sides - 1):  # 4 intermediate vertices
+            cx += L * math.cos(heading)
+            cy += L * math.sin(heading)
+            offsets.append((round(cx, 4), round(cy, 4)))
+            heading += ext_angle
+        # The 5th side (back to origin) is added automatically by _fly_shape_path
+
+        if self._logger_fn:
+            self._logger_fn(
+                f"Pentagon: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
 
     # === Complete Flight Execution ===
 
@@ -1337,6 +1864,11 @@ class LiteWing:
         # Store raw firmware values BEFORE any axis remapping (for diagnostics)
         self._sensors.raw_delta_x = delta_x   # literal motion.deltaX from firmware
         self._sensors.raw_delta_y = delta_y   # literal motion.deltaY from firmware
+
+        # Extract EKF position estimates (firmware mode uses these)
+        self._sensors.kalman_x = data.get("kalman.stateX", self._sensors.kalman_x)
+        self._sensors.kalman_y = data.get("kalman.stateY", self._sensors.kalman_y)
+        self._sensors.kalman_z = data.get("kalman.stateZ", self._sensors.kalman_z)
 
         # Swap axes: sensor deltaY → drone forward (X), sensor deltaX → drone lateral (Y)
         # This aligns the optical flow frame with the drone's body frame at the source,

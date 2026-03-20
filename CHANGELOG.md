@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.3] - 2026-03-20
+
+### Added
+- Shape flight methods: `drone.square(length, duration, face_direction)`, `drone.triangle()`, `drone.circle()`, `drone.pentagon()`.
+- Circle auto-calculates waypoints for smooth arcs (≤ 0.05m spacing) and sends `go_to` commands directly for continuous motion.
+- Polygons use edge-walking geometry (corner-start, full side length, clean yaw angles).
+- Space key safe landing: pressing **Space** during flight triggers `drone.land()` (vs `Ctrl+C` = emergency stop).
+- New example: `examples/level_3/05_shape_flight.py`.
+- New test classes: `TestShapeFunctions`, `TestConfigDefaults`, `TestConfigModifiable` in `tests/test_litewing.py`.
+
+### Changed
+- Unified takeoff/landing duration config: both firmware and library modes now use `DEFAULT_TAKEOFF_DURATION` and `DEFAULT_LANDING_DURATION` (removed duplicate `TAKEOFF_TIME`/`LANDING_TIME`).
+- `takeoff(height, duration)` — first param is **height**, second is **duration**. Previously had inconsistent configs per mode.
+- `emergency_stop()` no longer clears LEDs — preserves error notification state.
+- `disconnect()` no longer clears LEDs — only detaches the LED controller.
+- Position reset before each shape/circle pattern (current hover position becomes origin).
+- Yaw normalized to 0°–360° range in shape methods.
+
+### Fixed
+- Takeoff duration not applying correctly when passed as argument (`drone.takeoff(duration=1)`).
+- Square shape was centered (halved coordinates) instead of corner-start with full side length.
+- Circle timing was incorrect — `fly_to()` added 0.5s overhead per waypoint; now uses direct `go_to` for continuous smooth motion.
+
 ## [0.1.2] - 2026-03-17
 
 ### Changed

@@ -9,7 +9,8 @@ import time
 from .config import defaults
 from ._safety import check_link_safety, check_battery_safe
 from ._connection import (
-    setup_sensor_logging, apply_firmware_parameters, stop_logging_configs
+    setup_sensor_logging, apply_firmware_parameters, stop_logging_configs,
+    setup_debug_wrappers
 )
 
 
@@ -28,6 +29,7 @@ def run_flight_sequence(drone, maneuver_fn=None):
 
     cflib.crtp.init_drivers()
     cf = Crazyflie(rw_cache="./cache")
+    setup_debug_wrappers(cf, logger_fn=drone._logger_fn)
     log_motion = None
     log_battery = None
 
@@ -99,10 +101,20 @@ def run_flight_sequence(drone, maneuver_fn=None):
 
             # Initialize commander
             if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
-                time.sleep(0.1)
+                if drone.position_hold_mode != "firmware":
+                    cf.commander.send_setpoint(0, 0, 0, 0)
+                    time.sleep(0.1)
                 cf.param.set_value("commander.enHighLevel", "1")
                 time.sleep(0.5)
+
+                # Firmware mode: reset EKF so position starts at (0,0,0)
+                if drone.position_hold_mode == "firmware":
+                    if drone._logger_fn:
+                        drone._logger_fn("Resetting EKF position to origin...")
+                    cf.param.set_value("kalman.resetEstimation", "1")
+                    time.sleep(0.1)
+                    cf.param.set_value("kalman.resetEstimation", "0")
+                    time.sleep(2)
             else:
                 if drone._logger_fn:
                     drone._logger_fn("DEBUG MODE: Skipping flight initialization")
@@ -116,25 +128,95 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 if not drone._flight_logger.is_logging:
                     drone._flight_logger.start(logger=drone._logger_fn)
 
-            takeoff_start = time.time()
-            takeoff_height_start = drone._sensors.height
+            if drone.position_hold_mode == "firmware":
+                # ── FIRMWARE takeoff via Port 0x08 ────────────────
+                dur = drone.default_takeoff_duration
+                cf.high_level_commander.takeoff(drone.target_height, dur, yaw=None)
+                t0 = time.time()
+                while time.time() - t0 < dur and drone._flight_active:
+                    if not check_link_safety(cf, drone._sensors.sensor_data_ready,
+                                            drone._sensors.last_sensor_heartbeat,
+                                            drone.debug_mode, drone._logger_fn):
+                        drone._flight_active = False
+                        break
+                    _log_csv_row(drone)
+                    time.sleep(0.1)
 
-            while (time.time() - takeoff_start < drone.takeoff_time and
-                   drone._flight_active):
-                if not check_link_safety(cf, drone._sensors.sensor_data_ready,
-                                        drone._sensors.last_sensor_heartbeat,
-                                        drone.debug_mode, drone._logger_fn):
-                    drone._flight_active = False
-                    break
+                # Stabilise (firmware holds autonomously)
+                drone._flight_phase = "STABILIZING"
+                t0 = time.time()
+                while time.time() - t0 < 2.0 and drone._flight_active:
+                    _log_csv_row(drone)
+                    time.sleep(0.1)
+            else:
+                # ── LIBRARY takeoff via Port 0x07 ─────────────────
+                takeoff_start = time.time()
+                takeoff_height_start = drone._sensors.height
 
-                if not drone.debug_mode:
-                    # Position hold during takeoff if height is sufficient
-                    if (has_position_hold and drone._sensors.sensor_data_ready and
-                            drone._sensors.height > 0.04):
+                while (time.time() - takeoff_start < drone.takeoff_time and
+                       drone._flight_active):
+                    if not check_link_safety(cf, drone._sensors.sensor_data_ready,
+                                            drone._sensors.last_sensor_heartbeat,
+                                            drone.debug_mode, drone._logger_fn):
+                        drone._flight_active = False
+                        break
+
+                    if not drone.debug_mode:
+                        if (has_position_hold and drone._sensors.sensor_data_ready and
+                                drone._sensors.height > 0.04):
+                            mvx, mvy = drone._position_hold.calculate_corrections(
+                                drone._position_engine.x, drone._position_engine.y,
+                                drone._position_engine.vx, drone._position_engine.vy,
+                                drone._sensors.height, True, current_yaw=drone._sensors.yaw
+                            )
+                        else:
+                            mvx, mvy = 0.0, 0.0
+
+                        total_vx = drone.hover_trim_pitch + mvx
+                        total_vy = drone.hover_trim_roll + mvy
+
+                        if drone.enable_takeoff_ramp:
+                            elapsed = time.time() - takeoff_start
+                            progress = min(1.0, elapsed / drone.takeoff_time)
+                            cmd_height = takeoff_height_start + (
+                                drone.target_height - takeoff_height_start
+                            ) * progress
+                        else:
+                            cmd_height = drone.target_height
+
+                        cf.commander.send_hover_setpoint(total_vx, total_vy, 0, cmd_height)
+
+                    _log_csv_row(drone)
+                    time.sleep(drone.control_update_rate)
+
+                # Post-takeoff height check
+                if (drone.enable_height_sensor_safety and not drone.debug_mode):
+                    height_change = drone._sensors.height - takeoff_height_start
+                    if height_change < drone._height_sensor_min_change:
+                        cf.commander.send_setpoint(0, 0, 0, 0)
+                        raise Exception(
+                            f"EMERGENCY: Height sensor failure! "
+                            f"Height stuck at {drone._sensors.height:.3f}m"
+                        )
+
+                # === STABILIZE ===
+                drone._flight_phase = "STABILIZING"
+                if drone._logger_fn:
+                    drone._logger_fn("Stabilizing...")
+                stab_start = time.time()
+
+                while (time.time() - stab_start < 3.0 and drone._flight_active):
+                    if not check_link_safety(cf, drone._sensors.sensor_data_ready,
+                                            drone._sensors.last_sensor_heartbeat,
+                                            drone.debug_mode, drone._logger_fn):
+                        drone._flight_active = False
+                        break
+
+                    if has_position_hold and drone._sensors.sensor_data_ready:
                         mvx, mvy = drone._position_hold.calculate_corrections(
                             drone._position_engine.x, drone._position_engine.y,
                             drone._position_engine.vx, drone._position_engine.vy,
-                            drone._sensors.height, True, current_yaw=drone._sensors.yaw
+                            drone._sensors.height, True
                         )
                     else:
                         mvx, mvy = 0.0, 0.0
@@ -142,62 +224,12 @@ def run_flight_sequence(drone, maneuver_fn=None):
                     total_vx = drone.hover_trim_pitch + mvx
                     total_vy = drone.hover_trim_roll + mvy
 
-                    # Takeoff ramp
-                    if drone.enable_takeoff_ramp:
-                        elapsed = time.time() - takeoff_start
-                        progress = min(1.0, elapsed / drone.takeoff_time)
-                        cmd_height = takeoff_height_start + (
-                            drone.target_height - takeoff_height_start
-                        ) * progress
-                    else:
-                        cmd_height = drone.target_height
-
-                    cf.commander.send_hover_setpoint(total_vx, total_vy, 0, cmd_height)
-
-                _log_csv_row(drone)
-                time.sleep(drone.control_update_rate)
-
-            # Post-takeoff height check
-            if (drone.enable_height_sensor_safety and not drone.debug_mode):
-                height_change = drone._sensors.height - takeoff_height_start
-                if height_change < drone._height_sensor_min_change:
-                    cf.commander.send_setpoint(0, 0, 0, 0)
-                    raise Exception(
-                        f"EMERGENCY: Height sensor failure! "
-                        f"Height stuck at {drone._sensors.height:.3f}m"
-                    )
-
-            # === STABILIZE ===
-            drone._flight_phase = "STABILIZING"
-            if drone._logger_fn:
-                drone._logger_fn("Stabilizing...")
-            stab_start = time.time()
-
-            while (time.time() - stab_start < 3.0 and drone._flight_active):
-                if not check_link_safety(cf, drone._sensors.sensor_data_ready,
-                                        drone._sensors.last_sensor_heartbeat,
-                                        drone.debug_mode, drone._logger_fn):
-                    drone._flight_active = False
-                    break
-
-                if has_position_hold and drone._sensors.sensor_data_ready:
-                    mvx, mvy = drone._position_hold.calculate_corrections(
-                        drone._position_engine.x, drone._position_engine.y,
-                        drone._position_engine.vx, drone._position_engine.vy,
-                        drone._sensors.height, True
-                    )
-                else:
-                    mvx, mvy = 0.0, 0.0
-
-                total_vx = drone.hover_trim_pitch + mvx
-                total_vy = drone.hover_trim_roll + mvy
-
-                if not drone.debug_mode:
-                    cf.commander.send_hover_setpoint(
-                        total_vx, total_vy, 0, drone.target_height
-                    )
-                _log_csv_row(drone)
-                time.sleep(drone.control_update_rate)
+                    if not drone.debug_mode:
+                        cf.commander.send_hover_setpoint(
+                            total_vx, total_vy, 0, drone.target_height
+                        )
+                    _log_csv_row(drone)
+                    time.sleep(drone.control_update_rate)
 
             # === HOVER / MANEUVER ===
             drone._flight_phase = "HOVERING"
@@ -205,60 +237,69 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 drone._logger_fn("Position hold active!")
 
             if maneuver_fn is not None:
-                # Execute the provided maneuver function
                 maneuver_fn(drone, cf, has_position_hold)
             else:
-                # Default hover loop
                 _hover_loop(drone, cf, has_position_hold, drone._hover_duration)
 
             # === LAND ===
             drone._flight_phase = "LANDING"
             if drone._logger_fn:
                 drone._logger_fn("Landing...")
-            land_start = time.time()
-            current_land_height = drone.target_height
-            dt = 0.02  # 50Hz control loop
 
-            # Gradual descent: lower target height smoothly with position hold
-            while (current_land_height > 0.02 and
-                   time.time() - land_start < drone.landing_time and
-                   drone._flight_active):
-                current_land_height -= drone.descent_rate * dt
-                current_land_height = max(current_land_height, 0.0)
-
-                # Keep position hold active during descent
-                if (has_position_hold and drone._sensors.sensor_data_ready and
-                        current_land_height > 0.03):
-                    mvx, mvy = drone._position_hold.calculate_corrections(
-                        drone._position_engine.x, drone._position_engine.y,
-                        drone._position_engine.vx, drone._position_engine.vy,
-                        drone._sensors.height, True
-                    )
-                else:
-                    mvx, mvy = 0.0, 0.0
-
-                total_vx = drone.hover_trim_pitch + mvx
-                total_vy = drone.hover_trim_roll + mvy
-
+            if drone.position_hold_mode == "firmware":
+                # ── FIRMWARE land via Port 0x08 ───────────────────
+                dur = drone.default_landing_duration
+                cf.high_level_commander.land(0.0, dur, yaw=None)
+                t0 = time.time()
+                while time.time() - t0 < dur + 0.5 and drone._flight_active:
+                    _log_csv_row(drone)
+                    time.sleep(0.1)
                 if not drone.debug_mode:
-                    cf.commander.send_hover_setpoint(
-                        total_vx, total_vy, 0, current_land_height
-                    )
-                _log_csv_row(drone)
-                time.sleep(dt)
+                    cf.high_level_commander.stop()
+            else:
+                # ── LIBRARY land via Port 0x07 ────────────────────
+                land_start = time.time()
+                current_land_height = drone.target_height
+                dt = 0.02
 
-            # Brief settle at ground level before killing motors
-            settle_start = time.time()
-            while time.time() - settle_start < 0.3 and drone._flight_active:
+                while (current_land_height > 0.02 and
+                       time.time() - land_start < drone.landing_time and
+                       drone._flight_active):
+                    current_land_height -= drone.descent_rate * dt
+                    current_land_height = max(current_land_height, 0.0)
+
+                    if (has_position_hold and drone._sensors.sensor_data_ready and
+                            current_land_height > 0.03):
+                        mvx, mvy = drone._position_hold.calculate_corrections(
+                            drone._position_engine.x, drone._position_engine.y,
+                            drone._position_engine.vx, drone._position_engine.vy,
+                            drone._sensors.height, True
+                        )
+                    else:
+                        mvx, mvy = 0.0, 0.0
+
+                    total_vx = drone.hover_trim_pitch + mvx
+                    total_vy = drone.hover_trim_roll + mvy
+
+                    if not drone.debug_mode:
+                        cf.commander.send_hover_setpoint(
+                            total_vx, total_vy, 0, current_land_height
+                        )
+                    _log_csv_row(drone)
+                    time.sleep(dt)
+
+                # Brief settle at ground level before killing motors
+                settle_start = time.time()
+                while time.time() - settle_start < 0.3 and drone._flight_active:
+                    if not drone.debug_mode:
+                        cf.commander.send_hover_setpoint(
+                            drone.hover_trim_pitch, drone.hover_trim_roll, 0, 0
+                        )
+                    time.sleep(0.02)
+
+                # Stop motors
                 if not drone.debug_mode:
-                    cf.commander.send_hover_setpoint(
-                        drone.hover_trim_pitch, drone.hover_trim_roll, 0, 0
-                    )
-                time.sleep(0.02)
-
-            # Stop motors
-            if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
+                    cf.commander.send_setpoint(0, 0, 0, 0)
 
             drone._flight_phase = "COMPLETE"
             if drone._logger_fn:
@@ -271,7 +312,10 @@ def run_flight_sequence(drone, maneuver_fn=None):
         # Try to stop motors
         try:
             if not drone.debug_mode:
-                cf.commander.send_setpoint(0, 0, 0, 0)
+                if drone.position_hold_mode == "firmware":
+                    cf.high_level_commander.stop()
+                else:
+                    cf.commander.send_setpoint(0, 0, 0, 0)
         except Exception:
             pass
     finally:
@@ -285,7 +329,6 @@ def run_flight_sequence(drone, maneuver_fn=None):
 def _hover_loop(drone, cf, has_pos_hold, duration):
     """Run a simple timed hover with position hold."""
     hover_start = time.time()
-
     _low_bat_warned = False
 
     while (time.time() - hover_start < duration and drone._flight_active):
@@ -322,25 +365,30 @@ def _hover_loop(drone, cf, has_pos_hold, duration):
                 except Exception:
                     pass
 
-        # Periodic position reset
-        drone._position_engine.periodic_reset_check()
-
-        if has_pos_hold and drone._sensors.sensor_data_ready:
-            mvx, mvy = drone._position_hold.calculate_corrections(
-                drone._position_engine.x, drone._position_engine.y,
-                drone._position_engine.vx, drone._position_engine.vy,
-                drone._sensors.height, True
-            )
+        if drone.position_hold_mode == "firmware":
+            # Firmware holds position autonomously — no commands needed
+            pass
         else:
-            mvx, mvy = 0.0, 0.0
+            # Library mode: stream hover setpoints via Port 0x07
+            drone._position_engine.periodic_reset_check()
 
-        total_vx = drone.hover_trim_pitch + mvx
-        total_vy = drone.hover_trim_roll + mvy
+            if has_pos_hold and drone._sensors.sensor_data_ready:
+                mvx, mvy = drone._position_hold.calculate_corrections(
+                    drone._position_engine.x, drone._position_engine.y,
+                    drone._position_engine.vx, drone._position_engine.vy,
+                    drone._sensors.height, True
+                )
+            else:
+                mvx, mvy = 0.0, 0.0
 
-        if not drone.debug_mode:
-            cf.commander.send_hover_setpoint(
-                total_vx, total_vy, 0, drone.target_height
-            )
+            total_vx = drone.hover_trim_pitch + mvx
+            total_vy = drone.hover_trim_roll + mvy
+
+            if not drone.debug_mode:
+                cf.commander.send_hover_setpoint(
+                    total_vx, total_vy, 0, drone.target_height
+                )
+
         _log_csv_row(drone)
         time.sleep(drone.control_update_rate)
 

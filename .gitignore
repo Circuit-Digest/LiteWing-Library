@@ -25,5 +25,3 @@ Thumbs.db
 # LiteWing cache
 cache/
 
-# In-development examples (not ready for standalone release)
-examples/level_0/

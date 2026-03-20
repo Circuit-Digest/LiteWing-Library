@@ -29,7 +29,7 @@ with LiteWing("192.168.43.42") as drone:
     # ── Manual control settings ──────────────────────────
 
     # How fast the drone responds to key input
-    drone.sensitivity = 0.2  # Default: 0.2 (m/s per key)
+    drone.sensitivity = 0.4  # Default: 0.2 (m/s per key)
 
     # What happens when you release all keys?
     drone.hold_mode = "current"  # "current" = stay here, "origin" = go back
@@ -48,10 +48,11 @@ with LiteWing("192.168.43.42") as drone:
     drone.start_manual_control()
 
     # Wait for manual control to finish (user presses SPACE/Q to land)
-    # The stop_manual_control() method joins the thread internally.
+    # We must wait for _flight_active (not just _manual_active) because
+    # the landing sequence runs AFTER _manual_active goes False.
     try:
-        while drone._manual_active:
-            time.sleep(0.5)
+        while drone._flight_active or drone._manual_active:
+            time.sleep(0.1)
     except KeyboardInterrupt:
         drone.stop_manual_control()
 
