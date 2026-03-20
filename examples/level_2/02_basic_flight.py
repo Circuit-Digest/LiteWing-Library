@@ -38,7 +38,7 @@ time.sleep(1)
 
 # ── LED indicator: ready to fly ──────────────────────
 drone.set_led_color(0, 255, 0)  # Green = ready
-time.sleep()
+time.sleep(1)
 
 # ── Fly! ─────────────────────────────────────────────
 print("Arming...")

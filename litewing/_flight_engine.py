@@ -153,7 +153,7 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 takeoff_start = time.time()
                 takeoff_height_start = drone._sensors.height
 
-                while (time.time() - takeoff_start < drone.takeoff_time and
+                while (time.time() - takeoff_start < drone.default_takeoff_duration and
                        drone._flight_active):
                     if not check_link_safety(cf, drone._sensors.sensor_data_ready,
                                             drone._sensors.last_sensor_heartbeat,
@@ -177,7 +177,7 @@ def run_flight_sequence(drone, maneuver_fn=None):
 
                         if drone.enable_takeoff_ramp:
                             elapsed = time.time() - takeoff_start
-                            progress = min(1.0, elapsed / drone.takeoff_time)
+                            progress = min(1.0, elapsed / drone.default_takeoff_duration)
                             cmd_height = takeoff_height_start + (
                                 drone.target_height - takeoff_height_start
                             ) * progress
@@ -263,7 +263,7 @@ def run_flight_sequence(drone, maneuver_fn=None):
                 dt = 0.02
 
                 while (current_land_height > 0.02 and
-                       time.time() - land_start < drone.landing_time and
+                       time.time() - land_start < drone.default_landing_duration and
                        drone._flight_active):
                     current_land_height -= drone.descent_rate * dt
                     current_land_height = max(current_land_height, 0.0)
