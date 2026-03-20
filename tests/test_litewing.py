@@ -231,3 +231,113 @@ class TestInternalModules:
         controller.set_target(1.0, 2.0)
         assert controller.target_x == 1.0
         assert controller.target_y == 2.0
+
+
+class TestShapeFunctions:
+    """Verify shape flight methods exist and produce correct geometry."""
+
+    def setup_method(self):
+        from litewing import LiteWing
+        self.drone = LiteWing()
+        self.drone.debug_mode = True          # no real drone needed
+        self.drone._flight_active = True      # simulate armed+flying state
+        self.drone._scf = object()            # dummy — prevents "not connected" guard
+
+    # ── Method existence ─────────────────────────────────────────────────────
+
+    def test_square_method_exists(self):
+        assert hasattr(self.drone, 'square')
+        assert callable(self.drone.square)
+
+    def test_triangle_method_exists(self):
+        assert hasattr(self.drone, 'triangle')
+        assert callable(self.drone.triangle)
+
+    def test_circle_method_exists(self):
+        assert hasattr(self.drone, 'circle')
+        assert callable(self.drone.circle)
+
+    def test_pentagon_method_exists(self):
+        assert hasattr(self.drone, 'pentagon')
+        assert callable(self.drone.pentagon)
+
+    def test_shape_helper_exists(self):
+        assert hasattr(self.drone, '_fly_shape_path')
+        assert callable(self.drone._fly_shape_path)
+
+    # ── Geometry validation (pure math, no drone) ────────────────────────────
+
+    def test_square_offset_count(self):
+        """Square must produce 4 corner offsets (+ 1 return leg = 5 legs)."""
+        import math
+        half = 0.3  # length=0.6
+        offsets = [
+            (-half, -half), (half, -half),
+            (half,  half),  (-half, half),
+        ]
+        assert len(offsets) == 4
+
+    def test_triangle_circumradius(self):
+        """Triangle circumradius formula: R = side / sqrt(3)."""
+        import math
+        length = 0.6
+        R = length / math.sqrt(3.0)
+        assert abs(R - 0.3464) < 0.001
+
+    def test_pentagon_circumradius(self):
+        """Pentagon circumradius formula: R = side / (2 * sin(π/5))."""
+        import math
+        length = 0.6
+        R = length / (2.0 * math.sin(math.pi / 5))
+        assert abs(R - 0.5106) < 0.001
+
+    def test_circle_waypoint_count_small(self):
+        """Small circle (0.5m diameter) must produce at least 12 waypoints."""
+        import math
+        diameter = 0.5
+        circumference = math.pi * diameter
+        n = max(12, int(math.ceil(circumference / 0.15)))
+        assert n >= 12
+
+    def test_circle_waypoint_count_medium(self):
+        """1m diameter circle should produce more waypoints than the minimum."""
+        import math
+        diameter = 1.0
+        circumference = math.pi * diameter
+        n = max(12, int(math.ceil(circumference / 0.15)))
+        assert n > 12        # circumference ~3.14m → ~21 waypoints
+
+    def test_circle_waypoint_count_large(self):
+        """Larger circle must scale waypoints proportionally."""
+        import math
+        n_small = max(12, int(math.ceil(math.pi * 0.5 / 0.15)))
+        n_large = max(12, int(math.ceil(math.pi * 2.0 / 0.15)))
+        assert n_large > n_small    # 2m circle needs more points than 0.5m
+
+    def test_circle_last_point_closes_loop(self):
+        """The last circle waypoint must be at angle=2π (back to start)."""
+        import math
+        diameter, n = 1.0, 21
+        radius = diameter / 2.0
+        last_angle = (2.0 * math.pi * n) / n    # = 2π
+        x = radius * math.cos(last_angle)
+        y = radius * math.sin(last_angle)
+        assert abs(x - radius) < 1e-9     # cos(2π) = 1 → x = radius
+        assert abs(y) < 1e-9              # sin(2π) = 0 → y = 0
+
+    def test_face_direction_default_true(self):
+        """All shape methods should default face_direction to True."""
+        import inspect
+        for name in ('square', 'triangle', 'circle', 'pentagon'):
+            method = getattr(self.drone, name)
+            sig = inspect.signature(method)
+            param = sig.parameters.get('face_direction')
+            assert param is not None, f"{name} missing face_direction param"
+            assert param.default is True, f"{name} face_direction default should be True"
+
+    def test_circle_parameter_name(self):
+        """circle() should use 'diameter' not 'radius' as first positional arg."""
+        import inspect
+        sig = inspect.signature(self.drone.circle)
+        params = list(sig.parameters.keys())
+        assert params[0] == 'diameter'

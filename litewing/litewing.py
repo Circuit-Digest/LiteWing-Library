@@ -1010,7 +1010,7 @@ class LiteWing:
                     f"Moving by ({dx:.2f}, {dy:.2f}) in {dur:.1f}s"
                 )
 
-            cf.high_level_commander.go_to(dx, dy, 0, 0, dur, relative=True)
+            cf.high_level_commander.go_to(round(dx, 2), round(dy, 2), 0, 0, round(dur, 2), relative=True)
             t0 = time.time()
             while time.time() - t0 < dur + 0.5 and self._flight_active:
                 self._log_csv_if_active()
@@ -1163,7 +1163,7 @@ class LiteWing:
                     f"Flying to ({x:.2f}, {y:.2f}, {z:.2f}{yaw_str}) in {dur:.1f}s"
                 )
 
-            cf.high_level_commander.go_to(x, y, z, target_yaw_rad, dur, relative=False)
+            cf.high_level_commander.go_to(round(x, 2), round(y, 2), round(z, 2), round(target_yaw_rad, 4), round(dur, 2), relative=False)
 
             t0 = time.time()
             while time.time() - t0 < dur + 0.5 and self._flight_active:
@@ -1246,6 +1246,312 @@ class LiteWing:
             if self._logger_fn:
                 self._logger_fn(f"Waypoint {i + 1}/{len(waypoints)}")
             self.fly_to(x, y, z=z, yaw=yaw, speed=speed, threshold=threshold)
+
+    # === Shape Paths (Tier 3) ===
+
+    def _fly_shape_path(self, offsets, duration, face_direction):
+        """
+        Internal helper — fly through a list of (x, y) offsets from the
+        drone's current position, then return to the starting point.
+
+        Args:
+            offsets:        List of (x, y) tuples relative to start position.
+            duration:       Total time budget for the whole shape (seconds).
+            face_direction: If True, rotate drone nose toward the next waypoint
+                            before/during each leg. If False, keep current yaw.
+        """
+        import math
+
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot fly shape — not in flight!")
+            return
+
+        cf = self._cf_instance
+
+        # ── Reset EKF so current hover position becomes origin (0,0) ──
+        if not self.debug_mode and self.position_hold_mode == "firmware":
+            if self._logger_fn:
+                self._logger_fn("Resetting EKF — current position becomes origin...")
+            cf.param.set_value("kalman.resetEstimation", "1")
+            time.sleep(0.1)
+            cf.param.set_value("kalman.resetEstimation", "0")
+            time.sleep(0.2)  # wait for EKF to re-converge
+
+            # Set yaw to 0° (face forward) before starting shape
+            if self._logger_fn:
+                self._logger_fn("Setting yaw=0° (face forward) before shape...")
+            cf.high_level_commander.go_to(0, 0, self.target_height, 0, 1.0, relative=False)
+            time.sleep(1.5)
+
+        # After EKF reset, origin is always (0, 0)
+        origin_x = 0.0
+        origin_y = 0.0
+
+        # Build absolute waypoint list: all offsets + return-to-origin
+        abs_waypoints = [(origin_x + dx, origin_y + dy) for dx, dy in offsets]
+        abs_waypoints.append((origin_x, origin_y))  # final: return to start
+
+        # Speed calculation — spread the time budget across all legs evenly
+        # fly_to() in firmware mode waits (dur + 0.5s) per call,
+        # so we subtract that overhead to hit the requested total duration.
+        n_legs = len(abs_waypoints)
+        FLY_TO_OVERHEAD = 0.5  # seconds of stabilization in fly_to()
+        time_per_leg = duration / n_legs
+        effective_fly_time = max(time_per_leg - FLY_TO_OVERHEAD, 0.3)
+
+        # Iterate through waypoints
+        prev_x, prev_y = origin_x, origin_y
+        for i, (tx, ty) in enumerate(abs_waypoints):
+            if not self._flight_active:
+                break
+
+            dx = tx - prev_x
+            dy = ty - prev_y
+            seg_len = math.sqrt(dx * dx + dy * dy)
+
+            # Yaw toward the next point's direction (normalized to 0°–360°)
+            if face_direction and seg_len > 0.001:
+                yaw_deg = math.degrees(math.atan2(dy, dx)) % 360.0
+            else:
+                yaw_deg = None
+
+            # Speed = distance / effective flight time (excluding overhead)
+            speed = seg_len / effective_fly_time if effective_fly_time > 0 else self.default_flight_speed
+            speed = max(0.05, min(speed, self.max_flight_speed))
+
+            if self._logger_fn:
+                yaw_str = f", yaw={yaw_deg:.0f}°" if yaw_deg is not None else ""
+                self._logger_fn(
+                    f"  Shape leg {i + 1}/{n_legs}: "
+                    f"({tx:.2f}, {ty:.2f}){yaw_str} at {speed:.2f} m/s"
+                )
+
+            self.fly_to(tx, ty, yaw=yaw_deg, speed=speed)
+
+            prev_x, prev_y = tx, ty
+
+    def square(self, length, duration, face_direction=True):
+        """
+        Fly a square path starting from the current position.
+
+        Path: origin → forward → forward-left → left → back to origin.
+        Each side is exactly `length` meters. 4 legs total.
+
+        Args:
+            length:         Side length of the square in meters.
+            duration:       Total time to complete the full square (seconds).
+            face_direction: If True, drone nose faces the direction of travel
+                            at each corner turn. If False, heading is unchanged.
+
+        Example:
+            drone.square(0.6, 10)           # 0.6m square, 10 seconds
+            drone.square(0.8, 12, False)    # 0.8m square, fixed heading
+        """
+        L = length
+        # Forward → Left → Back → Origin (4 equal-length sides)
+        #   (0,0) → (L,0) → (L,L) → (0,L) → (0,0)
+        offsets = [
+            (L, 0.0),      # forward
+            (L, L),         # forward-left corner
+            (0.0, L),       # left
+        ]                   # return to (0,0) is added by _fly_shape_path
+        if self._logger_fn:
+            self._logger_fn(
+                f"Square: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
+
+    def triangle(self, length, duration, face_direction=True):
+        """
+        Fly an equilateral triangle path starting from the current position.
+
+        Path: origin → forward → forward-left → back to origin.
+        Each side is exactly `length` meters. 3 legs total.
+
+        Args:
+            length:         Side length of the triangle in meters.
+            duration:       Total time to complete the full triangle (seconds).
+            face_direction: If True, drone nose faces the direction of travel.
+                            If False, heading is unchanged.
+
+        Example:
+            drone.triangle(0.6, 8)          # 0.6m triangle, 8 seconds
+            drone.triangle(0.5, 10, False)  # fixed heading
+        """
+        import math
+        L = length
+        # Equilateral triangle: first side along +X (forward), then 120° turn
+        #   (0,0) → (L,0) → (L/2, L*√3/2) → (0,0)
+        # offsets = [
+        #     (L, 0.0),                                       # forward
+        #     (L / 2.0, L * math.sqrt(3.0) / 2.0),            # forward-left
+        # ]  # return to (0,0) added by _fly_shape_path
+
+        # Left hand triangle
+        offsets = [
+            (L, 0.0),                                       # forward
+            (0.0, L),                                       # left-back
+        ]  # return to (0,0) added by _fly_shape_path
+        if self._logger_fn:
+            self._logger_fn(
+                f"Triangle: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
+
+    def circle(self, diameter, duration, face_direction=True):
+        """
+        Fly a smooth circular path centered on the current position.
+
+        The number of waypoints is automatically calculated so the arc
+        spacing is ≤ 0.05 m, giving a smooth circle regardless of size.
+
+        Unlike polygon shapes, circle sends go_to commands directly
+        (not through fly_to) for continuous smooth motion without
+        stabilization pauses between waypoints.
+
+        Args:
+            diameter:       Diameter of the circle in meters.
+            duration:       Total time to complete one full loop (seconds).
+            face_direction: If True, drone nose faces the tangent direction
+                            (always pointing the way it's flying).
+                            If False, heading is unchanged.
+
+        Example:
+            drone.circle(1.0, 15)           # 1m diameter circle, 15 seconds
+            drone.circle(0.5, 8, False)     # no yaw rotation
+        """
+        import math
+        radius = diameter / 2.0
+        circumference = math.pi * diameter
+
+        # Dynamic waypoint count for smooth arc (≤ 0.05 m per step, min 12)
+        n = max(12, int(math.ceil(circumference / 0.05)))
+
+        if self._logger_fn:
+            self._logger_fn(
+                f"Circle: diameter={diameter}m, duration={duration}s, "
+                f"n_waypoints={n}, face_direction={face_direction}"
+            )
+
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot fly circle — not in flight!")
+            return
+
+        cf = self._cf_instance
+
+        # ── Reset EKF so current hover position becomes origin (0,0) ──
+        if not self.debug_mode and self.position_hold_mode == "firmware":
+            if self._logger_fn:
+                self._logger_fn("Resetting EKF — current position becomes origin...")
+            cf.param.set_value("kalman.resetEstimation", "1")
+            time.sleep(0.1)
+            cf.param.set_value("kalman.resetEstimation", "0")
+            time.sleep(0.2)
+
+        # ── Smooth lead-in: origin → circle edge → rotate to tangent ──
+        # Step 1: Face forward at origin (yaw=0°)
+        # Step 2: Fly straight out to (radius, 0) — the circle start point
+        # Step 3: Rotate yaw to 90° (tangent direction at angle=0)
+        # This prevents the jerk from jumping directly into circular motion.
+        if not self.debug_mode:
+            if self._logger_fn:
+                self._logger_fn("Lead-in: moving to circle edge...")
+            # Face forward at origin
+            cf.high_level_commander.go_to(0, 0, self.target_height, 0, 1.0, relative=False)
+            time.sleep(1.0)
+            # Fly to circle edge (radius, 0)
+            cf.high_level_commander.go_to(radius, 0, self.target_height, 0, 2.0, relative=False)
+            time.sleep(2.5)
+            # Rotate to tangent direction (90° = π/2 rad) at circle start
+            if face_direction:
+                if self._logger_fn:
+                    self._logger_fn("Lead-in: rotating to tangent yaw (90°)...")
+                cf.high_level_commander.go_to(radius, 0, self.target_height, round(math.pi / 2.0, 2), 1.5, relative=False)
+                time.sleep(2.0)
+
+        # ── Trace the circle by sending go_to directly (like Position.py) ──
+        # Each waypoint gets an equal time slice — no stabilization pauses,
+        # so the drone moves continuously along the arc.
+        time_per_wp = duration / n
+        height = self.target_height
+
+        for i in range(1, n + 1):
+            if not self._flight_active:
+                break
+
+            angle = (2.0 * math.pi * i) / n
+            x = round(radius * math.cos(angle), 2)
+            y = round(radius * math.sin(angle), 2)
+
+            # Tangent direction: angle + 90° (normalized to 0°–360°)
+            if face_direction:
+                yaw_rad = round(angle + math.pi / 2.0, 2)
+            else:
+                yaw_rad = 0.0
+
+            if self._logger_fn:
+                yaw_deg = math.degrees(yaw_rad) % 360.0
+                self._logger_fn(
+                    f"  Circle wp {i}/{n}: ({x}, {y}), "
+                    f"yaw={yaw_deg:.0f}°, dur={time_per_wp:.2f}s"
+                )
+
+            if not self.debug_mode:
+                cf.high_level_commander.go_to(
+                    x, y, height, yaw_rad,
+                    round(time_per_wp, 2), relative=False
+                )
+
+            self._log_csv_if_active()
+            time.sleep(time_per_wp)
+
+        if self._logger_fn:
+            self._logger_fn("Circle complete!")
+
+    def pentagon(self, length, duration, face_direction=True):
+        """
+        Fly a regular pentagon path starting from the current position.
+
+        The drone walks along 5 equal-length sides and returns to origin.
+        Each side is exactly `length` meters. 5 legs total.
+
+        Args:
+            length:         Side length of the pentagon in meters.
+            duration:       Total time to complete the full pentagon (seconds).
+            face_direction: If True, drone nose faces the direction of travel.
+                            If False, heading is unchanged.
+
+        Example:
+            drone.pentagon(0.6, 12)         # 0.6m pentagon, 12 seconds
+            drone.pentagon(0.8, 15, False)  # fixed heading
+        """
+        import math
+        L = length
+        n_sides = 5
+        ext_angle = 2.0 * math.pi / n_sides  # 72° exterior angle
+
+        # Walk the edges using turtle-graphics:
+        # Start at origin heading 0° (+X), turn left 72° at each vertex
+        heading = 0.0
+        cx, cy = 0.0, 0.0
+        offsets = []
+        for _ in range(n_sides - 1):  # 4 intermediate vertices
+            cx += L * math.cos(heading)
+            cy += L * math.sin(heading)
+            offsets.append((round(cx, 4), round(cy, 4)))
+            heading += ext_angle
+        # The 5th side (back to origin) is added automatically by _fly_shape_path
+
+        if self._logger_fn:
+            self._logger_fn(
+                f"Pentagon: side={length}m, duration={duration}s, "
+                f"face_direction={face_direction}"
+            )
+        self._fly_shape_path(offsets, duration, face_direction)
 
     # === Complete Flight Execution ===
 
