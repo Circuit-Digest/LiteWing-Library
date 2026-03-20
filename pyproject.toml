@@ -9,7 +9,7 @@ description = "Beginner-friendly Python library for LiteWing drone control"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.11,<3.12"
-author = [{name = "DhamuVkl @ https://github.com/DhamuVkl"}]
+authors = [{name = "DhamuVkl @ https://github.com/DhamuVkl"}]
 keywords = ["drone", "crazyflie", "litewing", "education", "robotics"]
 classifiers = [
     "Development Status :: 3 - Alpha",
