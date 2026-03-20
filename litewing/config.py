@@ -33,7 +33,7 @@ class _Defaults:
     # Set True to disable motors (sensors and logging still work)
     DEBUG_MODE = False
     # Set True to print every command sent to the drone (navigation, LEDs, etc.)
-    DEBUG_PRINT_MODE = True
+    DEBUG_PRINT_MODE = False
     # Set True to enable emergency stop if height sensor seems stuck during takeoff
     ENABLE_HEIGHT_SENSOR_SAFETY = False
     # Minimum height change expected during takeoff (meters)
@@ -135,8 +135,8 @@ class _Defaults:
     FW_Z_VEL_KP = 15.0        # Vertical velocity damping (stop height bouncing)
 
     # === POSITION HOLD MODE ===
-    # "firmware" — Position hold on-drone via high_level_commander (Port 0x08) [DEFAULT]
-    # "library"  — Position hold in Python via send_hover_setpoint (Port 0x07) [LEGACY]
+    # "firmware" — Position hold on-drone [DEFAULT]
+    # "library"  — Position hold in Python [LEGACY]
     POSITION_HOLD_MODE = "firmware"
 
     # === FIRMWARE FLIGHT DEFAULTS ===

@@ -2,7 +2,7 @@
 
 Complete reference for every function, class, and property in the `litewing` library.
 
-> **47+ public functions and properties** across 9 modules.
+> **55+ public functions and properties** across 9 modules.
 
 ---
 
@@ -58,10 +58,10 @@ with LiteWing("192.168.43.42") as drone:
 | Method | Description |
 |---|---|
 | `arm()` | Arm the drone — prepare for flight. Must be called before takeoff. |
-| `takeoff(height=None, speed=None)` | Take off to specified height (meters). Blocking. |
+| `takeoff(height=None, duration=None)` | Take off to specified height (meters) in `duration` seconds. Blocking. |
 | `hover(seconds)` | Hover in place for `seconds` duration while maintaining position hold. |
-| `land()` | Land the drone safely. Descends and stops motors. |
-| `emergency_stop()` | **Immediately** cuts all motors. Drone will fall! Use only in emergencies. |
+| `land(duration=None)` | Land the drone safely over `duration` seconds. |
+| `emergency_stop()` | **Immediately** cuts all motors. Drone will fall! Does NOT clear LEDs. |
 
 ### Movement Commands
 
@@ -95,6 +95,29 @@ with LiteWing("192.168.43.42") as drone:
 | `fly(maneuver_fn=None, hover_duration=None)` | Execute a complete flight: connect → takeoff → hover/maneuver → land. If `maneuver_fn` is provided, it runs during the hover phase. |
 | `fly_to(x, y, speed=0.3, threshold=None)` | Fly to absolute position `(x, y)` using position hold. Blocking. |
 | `fly_path(waypoints, speed=0.3, threshold=None)` | Fly through a list of `(x, y)` waypoint tuples. |
+
+### Shape Flight
+
+| Method | Description |
+|---|---|
+| `square(length, duration, face_direction=True)` | Fly a square path. Starts at origin, traces 4 equal sides, returns to start. |
+| `triangle(length, duration, face_direction=True)` | Fly an equilateral triangle path. 3 equal sides. |
+| `circle(diameter, duration, face_direction=True)` | Fly a smooth circular path. Waypoints auto-calculated (≤ 0.05m arc spacing). Uses direct `go_to` for continuous motion. |
+| `pentagon(length, duration, face_direction=True)` | Fly a regular pentagon path. 5 equal sides using turtle-graphics edge-walking. |
+
+- `face_direction=True`: drone nose faces direction of travel (tangent for circle).
+- `face_direction=False`: drone keeps its initial heading throughout.
+- All shapes reset EKF and set yaw=0° before starting.
+- All shapes return to origin after completing the pattern.
+
+> See: `level_3/05_shape_flight.py`
+
+### Safety Keys
+
+| Key | Action |
+|---|---|
+| `Ctrl+C` | **Emergency stop** — immediately cuts all motors. |
+| `Space` | **Safe landing** — triggers `drone.land()` for controlled descent. |
 
 ### Manual / Keyboard Control
 
@@ -145,11 +168,14 @@ All properties can be set directly on the `LiteWing` instance.
 | Property | Default | Description |
 |---|---|---|
 | `target_height` | `0.3` | Hover height in meters. |
-| `takeoff_time` | `1.0` | Takeoff ramp duration (seconds). |
-| `landing_time` | `2.0` | Landing descent timeout (seconds). |
-| `descent_rate` | `0.3` | Landing descent speed in m/s. |
+| `default_takeoff_duration` | `0.1` | Takeoff duration in seconds (both modes). |
+| `default_landing_duration` | `2.0` | Landing duration in seconds (both modes). |
+| `default_flight_speed` | `0.7` | Default speed for `fly_to()` in m/s. |
+| `max_flight_speed` | `2` | Safety clamp for flight speed (m/s). |
+| `descent_rate` | `0.25` | Landing descent speed in m/s (library mode). |
 | `hover_duration` | `20.0` | Default hover time (seconds). |
-| `enable_takeoff_ramp` | `False` | Smooth altitude ramp during takeoff. |
+| `enable_takeoff_ramp` | `False` | Smooth altitude ramp during takeoff (library mode). |
+| `position_hold_mode` | `"firmware"` | `"firmware"` (high-level commander) or `"library"` (Python PID). |
 | `debug_mode` | `False` | If `True`, disables motors (sensors still work). |
 | `enable_csv_logging` | `False` | Auto-create CSV log files during flight. |
 | `enable_sensor_check` | `True` | Check ToF/flow sensors on `arm()`. Set `False` to skip. |

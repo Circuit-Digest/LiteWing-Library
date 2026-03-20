@@ -27,9 +27,9 @@ drone.disconnect()
 | Function | What it does | When to use |
 |---|---|---|
 | `drone.arm()` | Prepare motors for flight | After `connect()`, before `takeoff()` |
-| `drone.takeoff()` | Take off and hover *(blocking)* | After `arm()` |
+| `drone.takeoff(height, duration)` | Take off and hover *(blocking)* | After `arm()` |
 | `drone.hover(seconds)` | Hover in place for N seconds | Between maneuvers |
-| `drone.land()` | Descend and stop motors | When done flying |
+| `drone.land(duration)` | Descend and stop motors | When done flying |
 | `drone.emergency_stop()` | **Kill all motors immediately** | Emergency only! Drone will fall |
 
 **Typical flow:**
@@ -121,6 +121,39 @@ drone.fly_path([
 ```
 
 > See: `level_3/03_waypoint_navigation.py`
+
+---
+
+## ⭐ Shape Flight
+
+| Function | What it does | When to use |
+|---|---|---|
+| `drone.square(length, duration, face_direction)` | Fly a square path | Geometric patterns |
+| `drone.triangle(length, duration, face_direction)` | Fly an equilateral triangle | Geometric patterns |
+| `drone.circle(diameter, duration, face_direction)` | Fly a smooth circle | Smooth circular arcs |
+| `drone.pentagon(length, duration, face_direction)` | Fly a regular pentagon | Geometric patterns |
+
+- `face_direction=True` (default): drone nose faces direction of travel
+- `face_direction=False`: drone keeps its initial heading
+- All shapes reset position to origin before starting
+
+**Example:**
+```python
+drone.square(length=0.6, duration=10)              # 60cm square in 10s
+drone.circle(diameter=1.0, duration=8)              # 1m diameter circle in 8s
+drone.triangle(length=0.5, duration=8, face_direction=False)  # fixed heading
+```
+
+> See: `level_3/05_shape_flight.py`
+
+---
+
+## ⚡ Safety Keys
+
+| Key | Action | Effect |
+|---|---|---|
+| `Ctrl+C` | Emergency stop | Immediately cuts all motors — drone falls |
+| `Space` | Safe landing | Triggers `drone.land()` — controlled descent |
 
 ---
 
@@ -249,9 +282,14 @@ live_dashboard(drone)
 | Property | Default | What to change it for |
 |---|---|---|
 | `drone.target_height` | `0.3` | Fly higher or lower |
+| `drone.default_takeoff_duration` | `0.1` | How long the takeoff takes (seconds) |
+| `drone.default_landing_duration` | `2.0` | How long the landing takes (seconds) |
+| `drone.default_flight_speed` | `0.7` | Default speed for `fly_to()` (m/s) |
+| `drone.max_flight_speed` | `2` | Safety clamp for flight speed (m/s) |
 | `drone.maneuver_distance` | `0.5` | Default move distance |
 | `drone.max_correction` | `0.7` | Speed cap for PID corrections |
-| `drone.descent_rate` | `0.3` | Landing descent speed (m/s) |
+| `drone.descent_rate` | `0.25` | Landing descent speed (m/s) |
+| `drone.position_hold_mode` | `"firmware"` | `"firmware"` or `"library"` |
 | `drone.debug_mode` | `False` | Set `True` to test without motors |
 | `drone.enable_sensor_check` | `True` | Set `False` to skip ToF/flow check on `arm()` |
 

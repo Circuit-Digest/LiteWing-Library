@@ -38,8 +38,7 @@ print("\n--- fly_to: Triangle pattern ---")
 # Fly forward
 drone.fly_to(0.6, 0.0, speed=0.25)    # +X = forward
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
-drone.fly_to(0.6, 0.0, 0.3, 90, speed=0.25)
-drone.hover(3)
+
 # Fly forward-left (corner)
 drone.fly_to(0.6, 0.6, speed=0.25)    # +X forward, +Y left
 print(f"  Position: ({drone.position[0]:.2f}, {drone.position[1]:.2f})")
@@ -70,7 +69,6 @@ print("\n--- fly_path: Square pattern ---")
 #
 square = [
     (0.3,  0.0),   # Move Forward
-    (0.3,  0.0, 0.3, 90),
     (0.3,  0.3),   # Move Left (to Forward-Left corner)
     (0.0,  0.3),   # Move Backward (to Left corner)
     (0.0,  0.0),   # Move Right (back to origin)
