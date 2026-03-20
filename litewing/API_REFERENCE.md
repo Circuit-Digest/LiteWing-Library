@@ -107,7 +107,7 @@ with LiteWing("192.168.43.42") as drone:
 
 - `face_direction=True`: drone nose faces direction of travel (tangent for circle).
 - `face_direction=False`: drone keeps its initial heading throughout.
-- All shapes reset EKF and set yaw=0° before starting.
+- All shapes reset and set yaw=0° before starting.
 - All shapes return to origin after completing the pattern.
 
 > See: `level_3/05_shape_flight.py`
