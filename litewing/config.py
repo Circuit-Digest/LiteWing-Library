@@ -28,7 +28,7 @@ class _Defaults:
     HOVER_DURATION = 20.0
     # Descent rate in m/s for gradual landing (0.3 = 30cm per second)
     DESCENT_RATE = 0.25
-
+    MAX_THRUST = 55000
     # === DEBUG & SAFETY ===
     # Set True to disable motors (sensors and logging still work)
     DEBUG_MODE = False
