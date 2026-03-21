@@ -1,5 +1,5 @@
 """
-Level 0 — Manual Control (No Sensors Required)
+Level 0 — Manual Control (No Position Module Required)
 =================================================
 Fly the drone with WASD + throttle keys — no ToF or optical flow needed!
 
@@ -45,7 +45,7 @@ drone.raw_trim_pitch = 0.0   # degrees (try -3.0 to 3.0)
 
 # ── Settings ─────────────────────────────────────────
 THRUST_STEP = 1000       # How much thrust changes per R/F press
-TILT_ANGLE = 5.0         # Roll/pitch in degrees per key
+TILT_ANGLE = 10.0         # Roll/pitch in degrees per key
 YAW_RATE = 30.0          # Yaw speed in degrees/sec
 MAX_THRUST = 35000       # Safety cap
 

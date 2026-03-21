@@ -1,6 +1,6 @@
 """
-Level 3 — Shape Flight
-========================
+Level 3 — Pattern Navigation
+=============================
 Fly geometric shapes using the built-in shape methods.
 
 What you'll learn:
@@ -51,8 +51,8 @@ drone.triangle(
 drone.hover(3)
 
 # ── 3. Circle ──────────────────────────────────────────
-# Waypoint count is auto-calculated for smooth arc (≤ 0.15m spacing).
-# diameter=1.0m → circumference≈3.14m → ~21 waypoints
+# Waypoint count is auto-calculated for smooth arc (≤ 0.05m spacing).
+# diameter=1.0m → circumference≈3.14m → ~60 waypoints
 print("\\n--- Circle (1.0m diameter, 15s, tangent heading) ---")
 drone.circle(
     diameter=1.0,

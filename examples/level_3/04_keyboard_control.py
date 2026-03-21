@@ -1,5 +1,5 @@
 """
-Level 3 — Manual Control
+Level 3 — Keyboard Control
 ==========================
 Fly the drone with WASD keyboard controls.
 
@@ -47,7 +47,7 @@ with LiteWing("192.168.43.42") as drone:
     # ── Start manual control ─────────────────────────────
     # This starts a background thread that handles:
     #   arm → takeoff → WASD loop → land
-    # Note: connect/disconnect are now handled by you (the student).
+    # Note: connect/disconnect are now handled on outside.
     drone.start_manual_control()
 
     # Wait for manual control to finish (user presses SPACE/Q to land)

@@ -72,11 +72,11 @@ with LiteWing("192.168.43.42") as drone:
 | `roll_left(distance=None, speed=0.2)` | Roll left by `distance` meters. |
 | `roll_right(distance=None, speed=0.2)` | Roll right by `distance` meters. |
 
-### Raw Control (No Sensors Required)
+### Raw Control (No Position Module Required)
 
 | Method | Description |
 |---|---|
-| `send_control(roll=0.0, pitch=0.0, yawrate=0.0, thrust=0)` | Send raw motor commands directly. Bypasses height/position hold. `roll`/`pitch` in degrees (±30), `yawrate` in deg/s (±200), `thrust` 0–65535. |
+| `send_control(roll=0.0, pitch=0.0, yawrate=0.0, thrust=0)` | Send raw motor commands directly. Bypasses height/position hold. `roll`/`pitch` in degrees (±30), `yawrate` in deg/s (±200), `thrust` 0–35000. |
 
 > **Warning:** Too much thrust will flip the drone! Start low (~15000) and increase slowly.
 

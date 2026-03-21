@@ -65,21 +65,6 @@ print("Step 1: Spinning motors gently...")
 drone.send_control(thrust=25000)
 time.sleep(1)
 
-# STEP 2: Increase thrust to lift off briefly
-print("Step 2: Light liftoff...")
-for thrust in range(15000, 25000, 1000):
-    drone.send_control(thrust=thrust)
-    time.sleep(0.1)
-
-# STEP 3: Hold for 1 second
-print("Step 3: Holding thrust for 1 second...")
-drone.send_control(thrust=25000)
-time.sleep(1)
-
-# STEP 4: Cut motors — drone will descend
-print("Step 4: Motors off!")
-drone.send_control(thrust=0)
-time.sleep(0.5)
 
 # ── Done ─────────────────────────────────────────────
 drone.send_control(thrust=0)

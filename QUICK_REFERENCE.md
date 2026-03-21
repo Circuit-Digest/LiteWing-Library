@@ -26,7 +26,7 @@ drone.disconnect()
 
 | Function | What it does | When to use |
 |---|---|---|
-| `drone.arm()` | Prepare motors for flight | After `connect()`, before `takeoff()` |
+| `drone.arm()` | Prepare drone for flight | After `connect()`, before `takeoff()` |
 | `drone.takeoff(height, duration)` | Take off and hover *(blocking)* | After `arm()` |
 | `drone.hover(seconds)` | Hover in place for N seconds | Between maneuvers |
 | `drone.land(duration)` | Descend and stop motors | When done flying |
@@ -46,28 +46,49 @@ drone.disconnect()
 
 ---
 
-## 🕹️ Raw Control (No Sensors Needed)
+## 📋 Status Properties
+
+| Property | Type | What it tells you |
+|---|---|---|
+| `drone.is_connected` | `bool` | Connected to drone? |
+| `drone.is_flying` | `bool` | Currently in flight? |
+| `drone.flight_phase` | `str` | Current state: `IDLE`, `TAKEOFF`, `HOVERING`, `LANDING`, etc. |
+---
+
+## ⚡ Safety Keys
+
+| Key | Action | Effect |
+|---|---|---|
+| `Ctrl+C` | Emergency stop | Immediately cuts all motors - drone falls |
+| `Space` | Safe landing | Triggers `drone.land()` - controlled descent |
+
+---
+
+---
+
+## 💡 LED Control
 
 | Function | What it does | When to use |
 |---|---|---|
-| `drone.send_control(roll, pitch, yawrate, thrust)` | Send raw motor commands directly | Sensorless flight, testing motors |
+| `drone.set_led_color(r, g, b)` | Set all LEDs to a color | Visual status (green=go, red=stop) |
+| `drone.set_led(index, r, g, b)` | Set one LED (0-3) to a color | Individual LED patterns |
+| `drone.blink_leds(on_ms, off_ms)` | Blink LEDs | Warnings, attention |
+| `drone.clear_leds()` | Turn off all LEDs | When done |
 
-- `roll` / `pitch`: tilt angles in degrees (−30 to +30)
-- `yawrate`: spin rate in deg/s (−200 to +200)
-- `thrust`: motor power (0–33500, ~28000 = hover)
-
-> ⚠️ Start thrust low (~15000) and increase slowly. Use `emergency_stop()` if needed.
-
+The drone has **4 LEDs** numbered 0-3. Colors use RGB values 0-255:
 ```python
-drone.connect()
-drone.send_control(thrust=0)    # Must send a zero-thrust setpoint first to unlock the commander
-time.sleep(0.5)
-drone.send_control(thrust=28500)     # gentle lift
-time.sleep(2)
-drone.disconnect()
+# All LEDs same color
+drone.set_led_color(255, 0, 0)    # All red
+drone.set_led_color(0, 255, 0)    # All green
+
+# Individual LEDs
+drone.set_led(0, 255, 0, 0)      # LED 0 = red
+drone.set_led(1, 0, 255, 0)      # LED 1 = green
+drone.set_led(2, 0, 0, 255)      # LED 2 = blue
+drone.set_led(3, 255, 255, 0)    # LED 3 = yellow
 ```
 
----
+> See: `level_2/01_led_control.py`
 
 ## 🏃 Movement Commands
 
@@ -162,14 +183,7 @@ drone.triangle(length=0.5, duration=8, face_direction=False)  # fixed heading
 
 ---
 
-## ⚡ Safety Keys
 
-| Key | Action | Effect |
-|---|---|---|
-| `Ctrl+C` | Emergency stop | Immediately cuts all motors - drone falls |
-| `Space` | Safe landing | Triggers `drone.land()` - controlled descent |
-
----
 
 ## 📡 Sensor Reading
 
@@ -180,53 +194,21 @@ drone.triangle(length=0.5, duration=8, face_direction=False)  # fixed heading
 | `drone.position` | `(x, y)` tuple | Estimated position from launch point |
 | `drone.velocity` | `(vx, vy)` tuple | How fast the drone is moving |
 | `drone.read_sensors()` | `SensorData` object | All sensor data in one snapshot |
-
-**Example:**
-```python
-print(f"Battery: {drone.battery:.2f}V")
-print(f"Height:  {drone.height:.2f}m")
-print(f"Position: {drone.position}")
-```
-
-### IMU Data
-| Property | Returns | What it tells you |
-|---|---|---|
 | `sensors.roll` | `float` (degrees) | Tilt left/right |
 | `sensors.pitch` | `float` (degrees) | Tilt forward/back |
 | `sensors.yaw` | `float` (degrees) | Rotation heading |
 | `sensors.acc_x/y/z` | `float` (g) | Acceleration on each axis |
 | `sensors.gyro_x/y/z` | `float` (deg/s) | Angular rate on each axis |
 
+**Example:**
 ```python
+print(f"Battery: {drone.battery:.2f}V")
+print(f"Height:  {drone.height:.2f}m")
+print(f"Position: {drone.position}")
+
 sensors = drone.read_sensors()
 print(f"Roll: {sensors.roll:.1f}°  Pitch: {sensors.pitch:.1f}°  Yaw: {sensors.yaw:.1f}°")
 ```
-
----
-
-## 💡 LED Control
-
-| Function | What it does | When to use |
-|---|---|---|
-| `drone.set_led_color(r, g, b)` | Set all LEDs to a color | Visual status (green=go, red=stop) |
-| `drone.set_led(index, r, g, b)` | Set one LED (0–3) to a color | Individual LED patterns |
-| `drone.blink_leds(on_ms, off_ms)` | Blink LEDs | Warnings, attention |
-| `drone.clear_leds()` | Turn off all LEDs | When done |
-
-The drone has **4 LEDs** numbered 0–3. Colors use RGB values 0–255:
-```python
-# All LEDs same color
-drone.set_led_color(255, 0, 0)    # All red
-drone.set_led_color(0, 255, 0)    # All green
-
-# Individual LEDs
-drone.set_led(0, 255, 0, 0)      # LED 0 = red
-drone.set_led(1, 0, 255, 0)      # LED 1 = green
-drone.set_led(2, 0, 0, 255)      # LED 2 = blue
-drone.set_led(3, 255, 255, 0)    # LED 3 = yellow
-```
-
-> See: `level_2/01_led_control.py`
 
 ---
 
@@ -279,10 +261,31 @@ live_dashboard(drone)
 | `drone.sensitivity` | `0.2` | Speed per key press (m/s) |
 | `drone.hold_mode` | `"current"` | `"current"` = stay put, `"origin"` = snap back |
 
-> See: `level_3/04_manual_control.py`
+> See: `level_3/04_keyboard_control.py`
 
 ---
+## 🕹️ Raw Control (Without LiteWing Flight Positioning Module)
 
+| Function | What it does | When to use |
+|---|---|---|
+| `drone.send_control(roll, pitch, yawrate, thrust)` | Send raw motor commands directly | Sensorless flight, testing motors |
+
+- `roll` / `pitch`: tilt angles in degrees (−30 to +30)
+- `yawrate`: spin rate in deg/s (−200 to +200)
+- `thrust`: motor power (0–33500, ~28000 = hover)
+
+> ⚠️ Start thrust low (~15000) and increase slowly. Use `emergency_stop()` if needed.
+
+```python
+drone.connect()
+drone.send_control(thrust=0)    # Must send a zero-thrust setpoint first to unlock the commander
+time.sleep(0.5)
+drone.send_control(thrust=28500)     # gentle lift
+time.sleep(2)
+drone.disconnect()
+```
+
+---
 
 ## ⚙️ Tunable Parameters
 
@@ -337,13 +340,3 @@ live_dashboard(drone)
 | `drone.raw_trim_roll` | `0.0` | Roll trim for raw control (degrees) |
 | `drone.raw_trim_pitch` | `0.0` | Pitch trim for raw control (degrees) |
 
----
-
-
-## 📋 Status Properties
-
-| Property | Type | What it tells you |
-|---|---|---|
-| `drone.is_connected` | `bool` | Connected to drone? |
-| `drone.is_flying` | `bool` | Currently in flight? |
-| `drone.flight_phase` | `str` | Current state: `IDLE`, `TAKEOFF`, `HOVERING`, `LANDING`, etc. |
