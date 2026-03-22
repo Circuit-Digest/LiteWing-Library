@@ -6,7 +6,7 @@ Learn the fundamentals of drone flight control.
 |---|--------|-----------------|
 | 01 | `01_led_control.py` | Set LED colors, blink patterns, and clear LEDs |
 | 02 | `02_basic_flight.py` | Arm, takeoff, hover, and land |
-| 03 | `03_tuning_config.py` | Adjust height, thrust, and PID gains |
+| 03 | `03_live_sensor_visualization.py` | visualize real-time drone sensor data |
 | 04 | `04_data_logging.py` | Log flight data to CSV and preview results |
 
 ## ⚠️ Safety
