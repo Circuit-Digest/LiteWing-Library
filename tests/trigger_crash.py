@@ -14,6 +14,7 @@ Crash Types:
 
 # GDB Debugging Commands Reference (Useful when diagnosing drone firmware crashes)
 # IDF Terminal: python $env:IDF_PATH/components/espcoredump/espcoredump.py -p COM9 dbg_corefile build/ESPDrone.elf
+# IDF Terminal: python $env:IDF_PATH/components/partition_table/parttool.py -p COM9 erase_partition --partition-type=data --partition-subtype=coredump
 # Command        Purpose                                                   Why it helps your Drone
 # ---------------------------------------------------------------------------------------------------------------
 # bt             Backtrace: Shows the chain of function calls leading      Finds the exact line of code that
