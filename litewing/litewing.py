@@ -21,6 +21,8 @@ import time
 import atexit
 import signal
 import threading
+import math
+from typing import List, Tuple, Union
 
 from .config import defaults
 from .pid import PIDConfig
@@ -1052,6 +1054,104 @@ class LiteWing:
             distance = self.maneuver_distance
         self._execute_movement(0.0, -distance, speed)
 
+    def rotate_left(self, degrees=90, speed=90):
+        """
+        Rotate left (counter-clockwise) by the specified angle.
+
+        Args:
+            degrees: Degrees to rotate (default: 90).
+            speed: Rotation speed in degrees per second (default: 90).
+        """
+        self._execute_rotation(degrees, speed)
+
+    def rotate_right(self, degrees=90, speed=90):
+        """
+        Rotate right (clockwise) by the specified angle.
+
+        Args:
+            degrees: Degrees to rotate (default: 90).
+            speed: Rotation speed in degrees per second (default: 90).
+        """
+        self._execute_rotation(-degrees, speed)
+
+    def _execute_rotation(self, diff_deg, speed):
+        """
+        Execute a relative rotation (yaw change).
+        """
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot rotate — not in flight!")
+            return
+
+        cf = self._cf_instance
+        target_yaw = self._sensors.yaw + diff_deg
+
+        if self.position_hold_mode == "firmware":
+            dur = max(abs(diff_deg) / speed, 0.5)
+            yaw_rad = math.radians(diff_deg)
+            if self._logger_fn:
+                self._logger_fn(f"Rotating by {diff_deg}° in {dur:.2f}s")
+            
+            # Use relative go_to with zero translation to rotate in place
+            cf.high_level_commander.go_to(0, 0, 0, round(yaw_rad, 4), round(dur, 2), relative=True)
+            
+            t0 = time.time()
+            while time.time() - t0 < dur + 0.2 and self._flight_active:
+                self._log_csv_if_active()
+                time.sleep(0.1)
+            return
+
+        # Library mode: active yawrate streaming with position hold
+        if self._logger_fn:
+            self._logger_fn(f"Rotating to target yaw: {target_yaw:.1f}°")
+
+        kp_yaw = 2.0
+        start_time = time.time()
+        timeout = max(abs(diff_deg) / 10.0 + 2.0, 5.0)
+
+        while self._flight_active and (time.time() - start_time < timeout):
+            current_yaw = self._sensors.yaw
+            error = target_yaw - current_yaw
+            # Normalize error to [-180, 180]
+            while error > 180: error -= 360
+            while error < -180: error += 360
+
+            if abs(error) < 2.0: # threshold
+                break
+
+            yawrate = error * kp_yaw
+            yawrate = max(-speed, min(speed, yawrate))
+
+            if not self.debug_mode and self._sensors.sensor_data_ready:
+                mvx, mvy = self._position_hold.calculate_corrections(
+                    self._position_engine.x, self._position_engine.y,
+                    self._position_engine.vx, self._position_engine.vy,
+                    self._sensors.height, True, current_yaw=current_yaw
+                )
+                cf.commander.send_hover_setpoint(
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
+                    round(yawrate, 2), self.target_height
+                )
+            
+            self._log_csv_if_active()
+            time.sleep(self.control_update_rate)
+
+        # Stabilize
+        stab_start = time.time()
+        while time.time() - stab_start < 0.5 and self._flight_active:
+            if not self.debug_mode and self._sensors.sensor_data_ready:
+                mvx, mvy = self._position_hold.calculate_corrections(
+                    self._position_engine.x, self._position_engine.y,
+                    self._position_engine.vx, self._position_engine.vy,
+                    self._sensors.height, True
+                )
+                cf.commander.send_hover_setpoint(
+                    self.hover_trim_pitch + mvx, self.hover_trim_roll + mvy,
+                    0, self.target_height
+                )
+            self._log_csv_if_active()
+            time.sleep(self.control_update_rate)
+
     def _execute_movement(self, dx, dy, speed):
         """
         Execute a relative movement.
@@ -1067,7 +1167,6 @@ class LiteWing:
         cf = self._cf_instance
 
         if self.position_hold_mode == "firmware":
-            import math
             distance = math.sqrt(dx**2 + dy**2)
             spd = min(speed, self.max_flight_speed)
             dur = max(distance / spd, 0.5)
@@ -1194,7 +1293,6 @@ class LiteWing:
         cf = self._cf_instance
 
         if self.position_hold_mode == "firmware":
-            import math
             # Get current position from EKF
             cur_x = self._sensors.kalman_x
             cur_y = self._sensors.kalman_y

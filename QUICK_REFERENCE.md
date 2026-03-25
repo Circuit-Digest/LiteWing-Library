@@ -100,6 +100,8 @@ All movement commands are **blocking** - they return when the drone arrives.
 | `drone.pitch_backward(distance, speed)` | Pitch backward | same as forward |
 | `drone.roll_left(distance, speed)` | Roll left | same |
 | `drone.roll_right(distance, speed)` | Roll right | same |
+| `drone.rotate_left(degrees, speed)` | Rotate left (counter-clockwise) | Rotate the drone by degrees |
+| `drone.rotate_right(degrees, speed)` | Rotate right (clockwise) | Rotate the drone by degrees |
 
 - `distance` defaults to `0.5m` (= `drone.maneuver_distance`)
 - `speed` defaults to `0.2 m/s` (= max velocity setpoint)
