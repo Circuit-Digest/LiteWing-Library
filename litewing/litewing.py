@@ -863,6 +863,57 @@ class LiteWing:
         if self._logger_fn:
             self._logger_fn("Landed!")
 
+    def change_height(self, delta, min_h=None, max_h=None):
+        """
+        Increase or decrease the hover height while in flight.
+
+        Args:
+            delta: Change in meters (positive = up, negative = down).
+            min_h: Optional safety floor in meters.
+            max_h: Optional safety ceiling in meters.
+        """
+        if delta is None:
+            return
+
+        if self._scf is None or not self._flight_active:
+            if self._logger_fn:
+                self._logger_fn("Cannot change height — not in flight!")
+            return
+
+        current_h = self._sensors.height
+        new_h = current_h + float(delta)
+
+        # Apply safety capping if requested
+        if min_h is not None:
+            new_h = max(new_h, float(min_h))
+        if max_h is not None:
+            new_h = min(new_h, float(max_h))
+
+        dur = 1.0  # Transition speed
+        move_delta = new_h - current_h
+
+        # Terminal feedback (consistent with other movement blocks)
+        if self._logger_fn:
+            verb = "Climbing" if delta > 0 else "Descending"
+            self._logger_fn(f"{verb} to {new_h:.2f}m...")
+
+        if self._logger_fn and self.debug_print_mode:
+            self._logger_fn(f"[DEBUG] height change: {delta}m -> target: {new_h:.2f}m")
+
+        # Update the property so future hover/maneuver loops use it
+        self.target_height = new_h
+
+        if self.position_hold_mode == "firmware":
+            # Move straight up/down using relative coordinates (delta Z)
+            self._cf_instance.high_level_commander.go_to(
+                0, 0, round(move_delta, 3), 0, dur, relative=True
+            )
+            # Blocking wait for the height change trajectory to complete
+            time.sleep(dur + 0.2)
+        else:
+            # Library mode: The hover loop already uses self.target_height
+            time.sleep(dur)
+
     def emergency_stop(self):
         """
         EMERGENCY STOP — immediately cuts all motors.

@@ -185,6 +185,7 @@ def run_manual_control(drone):
         nav_x = drone._sensors.kalman_x if drone._sensors.sensor_data_ready else 0.0
         nav_y = drone._sensors.kalman_y if drone._sensors.sensor_data_ready else 0.0
         nav_yaw = drone._sensors.yaw if drone._sensors.sensor_data_ready else 0.0
+        _last_h_log = 0.0
 
         while drone._manual_active:
             if not check_link_safety(cf, drone._sensors.sensor_data_ready and drone.position_hold_mode != "firmware",
@@ -192,6 +193,16 @@ def run_manual_control(drone):
                                     drone.debug_mode, drone._logger_fn):
                 drone._manual_active = False
                 break
+            
+            # Flight safety check for manual movement
+            if not drone._flight_active:
+                # If key pressed, warn user
+                if any(drone._manual_keys.get(k) for k in ["w", "a", "s", "d", "q", "e", "r", "f", "up", "down", "left", "right"]):
+                    if drone._logger_fn and time.time() - _last_h_log > 1.0:
+                        drone._logger_fn("Cannot command — not in flight!")
+                        _last_h_log = time.time()
+                time.sleep(0.1)
+                continue
 
             current_time = time.time()
             dt = current_time - last_loop_time
@@ -220,12 +231,23 @@ def run_manual_control(drone):
             if drone._manual_keys.get("e", False):
                 joystick_yaw -= 90.0               # E = yaw right (-deg/s)
             
+            # Height Adjustment (R = Up, F = Down) with safety caps and feedback
             if drone._manual_keys.get("r", False):
-                drone.target_height += 0.5 * dt    # R = height up (+Z)
+                drone.target_height += 0.5 * dt    # Rate: 0.5 m/s
+                if drone._logger_fn and time.time() - _last_h_log > 1.0:
+                    drone._logger_fn(f"Climbing to {drone.target_height:.2f}m...")
+                    _last_h_log = time.time()
             if drone._manual_keys.get("f", False):
-                drone.target_height -= 0.5 * dt    # F = height down (-Z)
-                if drone.target_height < 0.1:
-                    drone.target_height = 0.1      # Prevent digging into ground during active flight
+                drone.target_height -= 0.5 * dt
+                if drone._logger_fn and time.time() - _last_h_log > 1.0:
+                    drone._logger_fn(f"Descending to {drone.target_height:.2f}m...")
+                    _last_h_log = time.time()
+
+            # Enforce Blockly-standard safety caps (0.15m - 1.0m)
+            if drone.target_height < 0.15:
+                drone.target_height = 0.15
+            elif drone.target_height > 1.0:
+                drone.target_height = 1.0
 
             # Check if user is actively providing input
             joystick_active = (abs(joystick_vx) > 0.001 or 
@@ -237,7 +259,7 @@ def run_manual_control(drone):
             joystick_vx = round(joystick_vx, 2)
             joystick_vy = round(joystick_vy, 2)
             joystick_yaw = round(joystick_yaw, 2)
-            drone.target_height = round(drone.target_height, 2)
+            drone.target_height = round(float(drone.target_height), 2)
 
             if drone.position_hold_mode == "firmware":
                 if drone.commander_mode == "position":
