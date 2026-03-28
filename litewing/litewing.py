@@ -146,7 +146,8 @@ class LiteWing:
         self.settling_correction_factor = defaults.SETTLING_CORRECTION_FACTOR
         self._manual_keys = {
             "w": False, "s": False, "a": False, "d": False,
-            "q": False, "e": False, "r": False, "f": False
+            "q": False, "e": False, "r": False, "f": False,
+            "up": False, "down": False, "left": False, "right": False
         }
 
         # Firmware parameters
@@ -779,7 +780,12 @@ class LiteWing:
         Args:
             duration: Time in seconds for landing (default: drone.default_landing_duration).
         """
+        if self._logger_fn and self.debug_print_mode:
+            self._logger_fn(f"[DEBUG] land() entered. scf={self._scf is not None}, flight_active={self._flight_active}")
+
         if self._scf is None or not self._flight_active:
+            if self._logger_fn and self.debug_print_mode:
+                self._logger_fn("[DEBUG] land() ABORTED - not connected or flight not active")
             self._flight_active = False
             return
 
@@ -1774,14 +1780,21 @@ class LiteWing:
 
     def set_key(self, key, pressed):
         """
-        Set the state of a manual control key.
+        Set the state of a manual control key and trigger callbacks.
 
         Args:
             key: Key name ("w", "a", "s", "d").
             pressed: True if pressed, False if released.
         """
         if key in self._manual_keys:
+            old_state = self._manual_keys[key]
             self._manual_keys[key] = pressed
+            
+            # Trigger callbacks only on state change to avoid repeats
+            if pressed and not old_state and self._on_key_press_cb:
+                self._on_key_press_cb(key)
+            elif not pressed and old_state and self._on_key_release_cb:
+                self._on_key_release_cb(key)
 
     def on_key_press(self, callback):
         """Register a callback for key press events."""
