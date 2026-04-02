@@ -234,20 +234,20 @@ def run_manual_control(drone):
             # Height Adjustment (R = Up, F = Down) with safety caps and feedback
             if drone._manual_keys.get("r", False):
                 drone.target_height += 0.5 * dt    # Rate: 0.5 m/s
-                if drone._logger_fn and time.time() - _last_h_log > 1.0:
+                if drone._logger_fn and time.time() - _last_h_log > 2.0:
                     drone._logger_fn(f"Climbing to {drone.target_height:.2f}m...")
                     _last_h_log = time.time()
             if drone._manual_keys.get("f", False):
                 drone.target_height -= 0.5 * dt
-                if drone._logger_fn and time.time() - _last_h_log > 1.0:
+                if drone._logger_fn and time.time() - _last_h_log > 2.0:
                     drone._logger_fn(f"Descending to {drone.target_height:.2f}m...")
                     _last_h_log = time.time()
 
             # Enforce Blockly-standard safety caps (0.15m - 1.0m)
             if drone.target_height < 0.15:
                 drone.target_height = 0.15
-            elif drone.target_height > 1.0:
-                drone.target_height = 1.0
+            elif drone.target_height > 2.0:
+                drone.target_height = 2.0
 
             # Check if user is actively providing input
             joystick_active = (abs(joystick_vx) > 0.001 or 
