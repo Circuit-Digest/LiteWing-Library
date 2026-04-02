@@ -47,19 +47,20 @@ def _ensure_connected(drone):
         time.sleep(2)  # Wait for sensor data to start flowing
 
 
-def _apply_dark_theme():
-    """Apply a modern dark theme to matplotlib."""
+def _apply_lightweight_theme():
+    """Apply a lightweight and responsive modern theme to matplotlib."""
     plt.rcParams.update({
-        "figure.facecolor": "#1e1e2e",
-        "axes.facecolor": "#2a2a3d",
-        "axes.edgecolor": "#444466",
-        "axes.labelcolor": "#cdd6f4",
-        "text.color": "#cdd6f4",
-        "xtick.color": "#a6adc8",
-        "ytick.color": "#a6adc8",
-        "grid.color": "#3a3a5c",
-        "grid.alpha": 0.5,
-        "lines.linewidth": 1.8,
+        "figure.facecolor": "#f8f9fa",
+        "axes.facecolor": "#ffffff",
+        "axes.edgecolor": "#dee2e6",
+        "axes.labelcolor": "#495057",
+        "text.color": "#212529",
+        "xtick.color": "#adb5bd",
+        "ytick.color": "#adb5bd",
+        "grid.color": "#e9ecef",
+        "grid.alpha": 0.8,
+        "grid.linestyle": "--",
+        "lines.linewidth": 2.0,
         "font.size": 10,
         "axes.titlesize": 12,
         "axes.titleweight": "bold",
@@ -70,15 +71,16 @@ def _apply_dark_theme():
 
 # ─── Color palette ───────────────────────────────────────────────────
 COLORS = {
-    "cyan":    "#89dceb",
-    "green":   "#a6e3a1",
-    "yellow":  "#f9e2af",
-    "red":     "#f38ba8",
-    "mauve":   "#cba6f7",
-    "blue":    "#89b4fa",
-    "peach":   "#fab387",
-    "teal":    "#94e2d5",
-    "pink":    "#f5c2e7",
+    "cyan":    "#1098ad",
+    "green":   "#37b24d",
+    "yellow":  "#f59f00",
+    "red":     "#f03e3e",
+    "mauve":   "#845ef7",
+    "blue":    "#339af0",
+    "peach":   "#f76707",
+    "teal":    "#20c997",
+    "pink":    "#d6336c",
+    "dark":    "#212529",
 }
 
 
@@ -160,14 +162,15 @@ def live_dashboard(drone, max_points=200, update_ms=100):
         update_ms: Plot refresh interval in milliseconds.
     """
     _check_matplotlib()
-    _apply_dark_theme()
+    _apply_lightweight_theme()
     _ensure_connected(drone)
 
     collector = _DataCollector(drone, max_points=max_points, interval_ms=update_ms)
     collector.start()
 
-    fig = plt.figure(figsize=(15, 8))
-    fig.suptitle("LiteWing — Live Sensor Dashboard", color=COLORS["cyan"])
+    # Fast static layout (constrained_layout kills animation performance)
+    fig = plt.figure(figsize=(13, 7))
+    fig.suptitle("LiteWing - Live Sensor Dashboard", color=COLORS["dark"])
     gs = fig.add_gridspec(2, 3, wspace=0.3, hspace=0.4)
 
     ax_h = fig.add_subplot(gs[0, 0])
@@ -222,8 +225,8 @@ def live_dashboard(drone, max_points=200, update_ms=100):
     coord_text = ax_pos.text(
         0.02, 0.98, "", transform=ax_pos.transAxes,
         fontsize=9, verticalalignment='top',
-        color=COLORS["green"],
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#2a2a3d', alpha=0.8)
+        color=COLORS["dark"],
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#ffffff', edgecolor='#dee2e6', alpha=0.9)
     )
 
     def update(frame):
@@ -287,7 +290,9 @@ def live_dashboard(drone, max_points=200, update_ms=100):
             
             coord_text.set_text(f"Forward (X): {collector.x[-1]:.3f} m\nLeft (Y): {collector.y[-1]:.3f} m")
 
-    ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.92)
+    ani = animation.FuncAnimation(fig, update, interval=update_ms, blit=False, cache_frame_data=False)
 
     try:
         plt.show()
@@ -310,14 +315,14 @@ def live_height_plot(drone, max_points=200, update_ms=100):
         update_ms: Plot refresh interval in milliseconds.
     """
     _check_matplotlib()
-    _apply_dark_theme()
+    _apply_lightweight_theme()
     _ensure_connected(drone)
 
     collector = _DataCollector(drone, max_points=max_points, interval_ms=update_ms)
     collector.start()
 
     fig, ax = plt.subplots(figsize=(10, 5))
-    fig.suptitle("LiteWing — Live Height", color=COLORS["cyan"])
+    fig.suptitle("LiteWing - Live Height", color=COLORS["dark"])
 
     line_filt, = ax.plot([], [], color=COLORS["cyan"], linewidth=2, label="Filtered (Kalman)")
     line_raw,  = ax.plot([], [], color=COLORS["peach"], linewidth=1.5, alpha=0.7, label="Raw ToF Laser")
@@ -337,7 +342,9 @@ def live_height_plot(drone, max_points=200, update_ms=100):
         if h_all:
             ax.set_ylim(min(h_all) - 0.05, max(h_all) + 0.05)
 
-    ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
+    ani = animation.FuncAnimation(fig, update, interval=update_ms, blit=False, cache_frame_data=False)
 
     try:
         plt.show()
@@ -361,15 +368,14 @@ def live_imu_plot(drone, max_points=200, update_ms=100):
         update_ms: Plot refresh interval in milliseconds.
     """
     _check_matplotlib()
-    _apply_dark_theme()
+    _apply_lightweight_theme()
     _ensure_connected(drone)
 
     collector = _DataCollector(drone, max_points=max_points, interval_ms=update_ms)
     collector.start()
 
     fig, (ax_att, ax_gyro) = plt.subplots(2, 1, figsize=(10, 7))
-    fig.suptitle("LiteWing — Live IMU Data", color=COLORS["cyan"])
-    fig.subplots_adjust(hspace=0.35)
+    fig.suptitle("LiteWing - Live IMU Data", color=COLORS["dark"])
 
     # Attitude
     line_r, = ax_att.plot([], [], color=COLORS["red"], label="Roll")
@@ -415,7 +421,9 @@ def live_imu_plot(drone, max_points=200, update_ms=100):
             margin = max(abs(min(gyro)), abs(max(gyro)), 1) * 0.3
             ax_gyro.set_ylim(min(gyro) - margin, max(gyro) + margin)
 
-    ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9, hspace=0.35)
+    ani = animation.FuncAnimation(fig, update, interval=update_ms, blit=False, cache_frame_data=False)
 
     try:
         plt.show()
@@ -442,14 +450,14 @@ def live_position_plot(drone, max_points=500, update_ms=100):
         update_ms: Plot refresh interval in milliseconds.
     """
     _check_matplotlib()
-    _apply_dark_theme()
+    _apply_lightweight_theme()
     _ensure_connected(drone)
 
     collector = _DataCollector(drone, max_points=max_points, interval_ms=update_ms)
     collector.start()
 
-    fig, ax = plt.subplots(figsize=(8, 8))
-    fig.suptitle("LiteWing — Position Trail (Dead Reckoning)", color=COLORS["cyan"])
+    fig, ax = plt.subplots(figsize=(8, 6))
+    fig.suptitle("LiteWing - Position Trail (Dead Reckoning)", color=COLORS["dark"])
 
     # Trail line
     trail_line, = ax.plot([], [], color=COLORS["cyan"], linewidth=1.5, alpha=0.6)
@@ -468,8 +476,8 @@ def live_position_plot(drone, max_points=500, update_ms=100):
     coord_text = ax.text(
         0.02, 0.98, "", transform=ax.transAxes,
         fontsize=10, verticalalignment='top',
-        color=COLORS["green"],
-        bbox=dict(boxstyle='round,pad=0.3', facecolor='#2a2a3d', alpha=0.8)
+        color=COLORS["dark"],
+        bbox=dict(boxstyle='round,pad=0.3', facecolor='#ffffff', edgecolor='#dee2e6', alpha=0.9)
     )
 
     def update(frame):
@@ -504,7 +512,9 @@ def live_position_plot(drone, max_points=500, update_ms=100):
         # Coordinate text (Still show logical Drone X/Y for clarity)
         coord_text.set_text(f"Forward (X): {collector.x[-1]:.3f} m\nLeft (Y): {collector.y[-1]:.3f} m")
 
-    ani = animation.FuncAnimation(fig, update, interval=update_ms, cache_frame_data=False)
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.92)
+    ani = animation.FuncAnimation(fig, update, interval=update_ms, blit=False, cache_frame_data=False)
 
     try:
         plt.show()

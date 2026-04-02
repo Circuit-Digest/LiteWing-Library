@@ -28,6 +28,7 @@ drone.disconnect()
 |---|---|---|
 | `drone.arm()` | Prepare drone for flight | After `connect()`, before `takeoff()` |
 | `drone.takeoff(height, duration)` | Take off and hover *(blocking)* | After `arm()` |
+| `drone.change_height(delta, min_h, max_h)` | Change hover height safely | During flight |
 | `drone.hover(seconds)` | Hover in place for N seconds | Between maneuvers |
 | `drone.land(duration)` | Descend and stop motors | When done flying |
 | `drone.emergency_stop()` | **Kill all motors immediately** | Emergency only! Drone will fall |
@@ -231,16 +232,25 @@ print(f"Roll: {sensors.roll:.1f}°  Pitch: {sensors.pitch:.1f}°  Yaw: {sensors.
 
 | Function | What it shows | When to use |
 |---|---|---|
-| `live_dashboard(drone)` | 4-panel: height, attitude, velocity, battery | Full flight monitoring |
-| `live_height_plot(drone)` | Filtered + raw height | Height sensor testing |
-| `live_imu_plot(drone)` | Roll, pitch, yaw angles | IMU testing |
-| `live_position_plot(drone)` | 2D XY position trail | Position hold testing |
+| `drone.start_dashboard()` | 4-panel: height, attitude, velocity, battery | Full flight monitoring |
+| `drone.start_height_plot()` | Filtered + raw height | Height sensor testing |
+| `drone.start_imu_plot()` | Roll, pitch, yaw angles | IMU testing |
+| `drone.start_position_plot()` | 2D XY position trail | Position hold testing |
+| `drone.stop_plot()` | Stops the background plot | When visualization is done |
 
-Requires `matplotlib`. Auto-connects if needed.
+Requires `matplotlib`. Runs in the background (non-blocking) so your flight code continues.
 
 ```python
-from litewing.gui import live_dashboard
-live_dashboard(drone)
+# Setup plot before takeoff
+plot = drone.start_dashboard()
+
+drone.arm()
+drone.takeoff()
+# ... fly ...
+drone.land()
+
+# Stop when done
+drone.stop_plot() 
 ```
 
 > See: `level_1/with_gui/` examples

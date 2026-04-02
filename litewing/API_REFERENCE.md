@@ -59,6 +59,7 @@ with LiteWing("192.168.43.42") as drone:
 |---|---|
 | `arm()` | Arm the drone — prepare for flight. Must be called before takeoff. |
 | `takeoff(height=None, duration=None)` | Take off to specified height (meters) in `duration` seconds. Blocking. |
+| `change_height(delta, min_h=None, max_h=None)` | Increase or decrease hover height by `delta` meters in flight. |
 | `hover(seconds)` | Hover in place for `seconds` duration while maintaining position hold. |
 | `land(duration=None)` | Land the drone safely over `duration` seconds. |
 | `emergency_stop()` | **Immediately** cuts all motors. Drone will fall! Does NOT clear LEDs. |
@@ -150,6 +151,16 @@ with LiteWing("192.168.43.42") as drone:
 |---|---|
 | `start_logging(filename=None)` | Start recording flight data to CSV. Auto-generates timestamped filename if `None`. |
 | `stop_logging()` | Stop recording and close the CSV file. |
+
+### Live Plots (Non-Blocking)
+
+| Method | Description |
+|---|---|
+| `start_dashboard(max_points=200, update_ms=100)` | Start a full sensor dashboard in the background. |
+| `start_height_plot(max_points=200, update_ms=100)` | Start a live height plot in the background. |
+| `start_imu_plot(max_points=200, update_ms=100)` | Start a live IMU plot in the background. |
+| `start_position_plot(max_points=500, update_ms=100)` | Start a live XY position trail plot in the background. |
+| `stop_plot()` | Stop the currently running background plot. |
 
 ### Utility
 
@@ -359,21 +370,22 @@ Records flight data to CSV files.
 
 ## `gui` — Live Sensor Visualization (`gui.py`)
 
-Built-in matplotlib dashboards for real-time sensor plotting.
+Built-in matplotlib dashboards for real-time sensor plotting. While they can be called directly, the recommended way is using the `LiteWing` methods (e.g., `drone.start_dashboard()`).
 
 ```python
-from litewing.gui import live_dashboard
-live_dashboard(drone)
+plot = drone.start_dashboard()
+# ... flight code ...
+drone.stop_plot()
 ```
 
 | Function | Description |
 |---|---|
-| `live_dashboard(drone, max_points=200, update_ms=100)` | Full 4-panel dashboard: height, attitude, velocity, battery. |
-| `live_height_plot(drone, max_points=200, update_ms=100)` | Single plot: Kalman-filtered + raw ToF height. |
-| `live_imu_plot(drone, max_points=200, update_ms=100)` | Single plot: roll, pitch, yaw attitude angles. |
-| `live_position_plot(drone, max_points=500, update_ms=100)` | 2D XY position trail from optical flow dead reckoning. |
+| `start_live_dashboard(drone, max_points=200, update_ms=100)` | Full 4-panel dashboard: height, attitude, velocity, battery. |
+| `start_live_height_plot(drone, max_points=200, update_ms=100)` | Single plot: Kalman-filtered + raw ToF height. |
+| `start_live_imu_plot(drone, max_points=200, update_ms=100)` | Single plot: roll, pitch, yaw attitude angles. |
+| `start_live_position_plot(drone, max_points=500, update_ms=100)` | 2D XY position trail from optical flow dead reckoning. |
 
-All functions auto-connect the drone if not already connected. Requires `matplotlib`.
+Requires `matplotlib`.
 
 ---
 
