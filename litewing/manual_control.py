@@ -1,6 +1,8 @@
 """
 LiteWing Manual Control
 ========================
+Author: Dharagesh
+
 Keyboard/joystick-based real-time drone control with position hold.
 
 There are two hold modes:

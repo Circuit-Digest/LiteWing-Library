@@ -1,6 +1,8 @@
 """
-LiteWing — Beginner-Friendly Drone Library
+LiteWing - Beginner-Friendly Drone Library
 =============================================
+Author: Dharagesh
+
 Control your LiteWing drone with simple, educational Python code.
 
 Quick Start:

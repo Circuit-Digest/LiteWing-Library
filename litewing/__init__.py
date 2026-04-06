@@ -1,6 +1,7 @@
 """
-LiteWing — Beginner-Friendly Drone Library
+LiteWing - Beginner-Friendly Drone Library
 =============================================
+Author: Dharagesh
 
 from litewing import LiteWing, SensorData, PIDConfig
 
@@ -33,4 +34,4 @@ try:
     from importlib.metadata import version as _get_version
     __version__ = _get_version("litewing")
 except Exception:
-    __version__ = "0.1.3"  # Fallback if not installed via pip
+    __version__ = "0.1.4"  # Fallback if not installed via pip

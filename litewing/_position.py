@@ -1,6 +1,8 @@
 """
-LiteWing Internal — Dead Reckoning Position Engine
+LiteWing Internal - Dead Reckoning Position Engine
 ====================================================
+Author: Dharagesh
+
 Converts optical flow sensor data into velocity and position estimates.
 This is the math behind drone.position and drone.velocity.
 """

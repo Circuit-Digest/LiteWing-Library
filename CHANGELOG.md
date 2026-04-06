@@ -4,6 +4,44 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [0.1.4] - 2026-04-06
+
+### Added
+- `drone.change_height(delta, min_h, max_h)` — adjust hover altitude in-flight with optional safety floor/ceiling capping.
+- `drone.rotate_left(degrees, speed)` / `drone.rotate_right(degrees, speed)` — dedicated yaw rotation with firmware (high-level commander) and library (active yawrate streaming) modes.
+- Arrow key support (`up`, `down`, `left`, `right`) in manual control key map.
+- Flight safety guard in manual control — warns if movement keys are pressed while not in flight.
+- Height adjustment feedback during manual control — logs climbing/descending messages when using R/F keys.
+- `MAX_THRUST = 55000` constant added to config defaults.
+- New example: `level_2/03_live_sensor_visualization.py`.
+- New example: `level_3/01_position_hold_analysis.py`.
+- Level 1 example README.
+
+### Changed
+- GUI theme overhauled: replaced dark theme (`_apply_dark_theme`) with lightweight theme (`_apply_lightweight_theme`) — light background, stronger accent colors, dashed gridlines.
+- GUI rendering performance: removed `constrained_layout`, added `tight_layout()` + `subplots_adjust()`, explicit `blit=False` for reliable animation.
+- Hover height safety range changed from hardcoded `0.1m` floor to `0.15m–2.0m` range.
+- Convergence wait reduced from 2s to 1s after position reset.
+- Log messages simplified: user-facing text (e.g., "Resetting position to origin…").
+- `set_key()` now triggers `on_key_press`/`on_key_release` callbacks on state change (previously only updated internal map).
+- `import math` moved to module-level (removed per-function duplication).
+- Example reorganization:
+  - Removed `level_1/with_gui/` subfolder (4 old GUI examples deleted).
+  - Removed `level_1/01_basic_flight.py` (moved to level 2).
+  - Renamed `level_3/04_manual_control.py` → `04_keyboard_control.py`.
+  - Renamed `level_3/05_shape_flight.py` → `05_pattern_navigation.py`.
+  - Swapped `level_1/04_all_sensors.py` ↔ `05_imu_data.py` numbering.
+  - Replaced `level_2/03_tuning_config.py` with `03_live_sensor_visualization.py`.
+  - Replaced `level_3/01_position_hold.py` with `01_position_hold_analysis.py`.
+- Updated QUICK_REFERENCE.md and API_REFERENCE.md with new methods and corrections.
+
+### Fixed
+- **Direction coordinates swapped** in `pitch_forward`/`pitch_backward`/`roll_left`/`roll_right` — were passing `(dy, dx)` instead of `(dx, dy)` to `_execute_movement`.
+- Event chain not bridged from app UI — `set_key()` key press/release callbacks were not firing.
+- Stale telemetry log blocks causing missed sensor updates.
+- `target_height` now explicitly cast to `float` before rounding (prevents type errors).
+- Added debug logging to `land()` for troubleshooting flight state issues.
+
 ## [0.1.3] - 2026-03-20
 
 ### Added

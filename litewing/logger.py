@@ -1,6 +1,8 @@
 """
 LiteWing Flight Logger
 =======================
+Author: Dharagesh
+
 Record flight data to CSV files for later analysis.
 
 Usage:
