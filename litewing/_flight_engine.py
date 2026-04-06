@@ -1,7 +1,9 @@
 """
-LiteWing Internal — Flight Engine
+LiteWing Internal - Flight Engine
 ====================================
-The takeoff → stabilize → hover → maneuver → land state machine.
+Author: Dharagesh
+
+The takeoff -> stabilize -> hover -> maneuver -> land state machine.
 This runs in a background thread and handles the control loop.
 """
 

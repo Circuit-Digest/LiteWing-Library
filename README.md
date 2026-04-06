@@ -2,9 +2,10 @@
 
 **Beginner-friendly Python library for LiteWing drone control.**
 
-LiteWing-Library removes the low-level plumbing from drone programming while keeping the core engineering concepts visible. Built on top of [cflib](https://github.com/bitcraze/crazyflie-lib-python), it provides a simple API for flying, sensor reading, PID tuning, and position hold.
+Using this library, you will be able to fly your drone using simple lines of Python code. For example, you can ask it to take off and hold its position at a particular height, then land automatically, or even move in a particular direction for a fixed distance and then land.
 
-## Guide: [LiteWing-Library](https://github.com/sdham/LiteWing-Library)
+## Documentation
+Read Project Documentation: [LiteWing Python Library](https://circuitdigest.com/articles/litewing-drone-python-library-documentation)
 
 ## Installation
 
@@ -28,83 +29,12 @@ pip install .
 ```
 
 ### Requirements
-- **Python 3.11** (required - other versions will not work)
+- **Python 3.11** (mandatory)
   - Download: [Python 3.11](https://www.python.org/downloads/release/python-3119/)
   - Check **"Add Python to PATH"** during installation!
-- [cflib](https://github.com/bitcraze/crazyflie-lib-python) (installed automatically)
+- [cflib](https://github.com/Circuit-Digest/crazyflie-lib-python) (installed automatically)
 - [matplotlib](https://matplotlib.org/) (installed automatically)
 
-## Quick Start
-
-### Level 1 - Read Sensors (No Flying!)
-
-```python
-from litewing import LiteWing
-import time
-
-drone = LiteWing("192.168.43.42")
-drone.connect()          # Connect, no motors!
-time.sleep(2)            # Wait for sensor data
-print(f"Battery: {drone.battery:.2f}V")
-print(f"Height:  {drone.height:.3f}m")
-drone.disconnect()
-```
-
-### Level 2 - First Flight
-
-```python
-from litewing import LiteWing
-
-drone = LiteWing("192.168.43.42")
-drone.target_height = 0.3
-
-drone.fly(hover_duration=10)   # Takeoff, hover 10s, land
-```
-
-### Level 3 - PID Tuning & Waypoints
-
-```python
-from litewing import LiteWing
-import time
-
-drone = LiteWing("192.168.43.42")
-drone.target_height = 0.3
-
-# Tune the position hold PID
-drone.position_pid.kp = 1.0
-drone.position_pid.ki = 0.03
-
-drone.connect()
-time.sleep(2)
-
-drone.arm()
-drone.takeoff()
-
-# Fly a square path using fly_path()
-square = [
-    (0.0,  0.3),   # Forward
-    (-0.3, 0.3),   # Right-forward corner
-    (-0.3, 0.0),   # Right
-    (0.0,  0.0),   # Back to start
-]
-
-drone.fly_path(square, speed=0.3)
-
-drone.land()
-drone.disconnect()
-```
-
-## What's Exposed vs Hidden
-
-| You Configure (Educational)       | Library Handles (Plumbing)        |
-|-----------------------------------|-----------------------------------|
-| PID gains (kp, ki, kd)           | CRTP packet construction          |
-| Position hold on/off             | Dead reckoning integration        |
-| Optical flow scale               | cflib callbacks & threading       |
-| Trim corrections                 | SyncCrazyflie context management  |
-| Hold modes (current / origin)    | Axis swapping (vx ↔ vy)          |
-| Firmware Z-axis PID              | LogConfig setup                   |
-| Sensitivity, momentum comp.     | Retry & fallback logic            |
 
 ## API Reference
 
@@ -138,23 +68,24 @@ litewing-library/
 │   ├── _safety.py          # Internal: link/battery checks
 │   └── API_REFERENCE.md    # Full API docs
 ├── examples/               # Example scripts (by level)
-│   ├── level_1/            # Sensor reading — no flying
+│   ├── level_0/            # Quick-start scripts
+│   ├── level_1/            # Sensor reading - no flying
 │   │   ├── 01_battery_voltage.py
 │   │   ├── 02_height_data.py
 │   │   ├── 03_position_velocity.py
-│   │   ├── 04_all_sensors.py
-│   │   ├── 05_imu_data.py
-│   │   └── with_gui/       # Live plot variants
+│   │   ├── 04_imu_data.py
+│   │   └── 05_all_sensors.py
 │   ├── level_2/            # Basic flight control
 │   │   ├── 01_led_control.py
 │   │   ├── 02_basic_flight.py
-│   │   ├── 03_tuning_config.py
+│   │   ├── 03_live_sensor_visualization.py
 │   │   └── 04_data_logging.py
 │   ├── level_3/            # PID tuning, waypoints, advanced
-│   │   ├── 01_position_hold.py
+│   │   ├── 01_position_hold_analysis.py
 │   │   ├── 02_movement_commands.py
 │   │   ├── 03_waypoint_navigation.py
-│   │   └── 04_manual_control.py
+│   │   ├── 04_keyboard_control.py
+│   │   └── 05_pattern_navigation.py
 │   └── diagnostics/        # Debugging & sensor tools
 │       ├── blackbox_viewer.py
 │       ├── blackbox_playback.py
@@ -166,4 +97,4 @@ litewing-library/
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT - see [LICENSE](LICENSE) for details.

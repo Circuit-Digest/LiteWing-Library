@@ -1,6 +1,8 @@
 """
 LiteWing LED Control
 =====================
+Author: Dharagesh
+
 Control the NeoPixel LEDs on the drone for visual feedback.
 
 The drone has 4 individually addressable NeoPixel LEDs (index 0–3).

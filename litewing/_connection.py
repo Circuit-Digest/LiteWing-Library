@@ -1,6 +1,8 @@
 """
-LiteWing Internal — Connection Management
+LiteWing Internal - Connection Management
 ============================================
+Author: Dharagesh
+
 Handles cflib initialization, SyncCrazyflie connections, and log config setup.
 
 Log groups (each limited to ~26 bytes per CRTP packet):

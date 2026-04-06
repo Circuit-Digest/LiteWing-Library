@@ -1,6 +1,8 @@
 """
 LiteWing Sensor Data
 =====================
+Author: Dharagesh
+
 Access live sensor readings from the drone.
 
 The drone has several sensors:

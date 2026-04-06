@@ -1,6 +1,8 @@
 """
 LiteWing PID Controller
 ========================
+Author: Dharagesh
+
 A PID (Proportional-Integral-Derivative) controller keeps the drone stable.
 
 How it works:

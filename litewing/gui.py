@@ -1,6 +1,8 @@
 """
-LiteWing GUI — Live Sensor Plotting
+LiteWing GUI - Live Sensor Plotting
 =====================================
+Author: Dharagesh
+
 Built-in matplotlib dashboards for visualizing drone sensor data.
 
 Usage:

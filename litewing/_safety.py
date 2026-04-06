@@ -1,6 +1,8 @@
 """
-LiteWing Internal — Safety Checks
+LiteWing Internal - Safety Checks
 ====================================
+Author: Dharagesh
+
 Link health, sensor freshness, and battery monitoring.
 """
 

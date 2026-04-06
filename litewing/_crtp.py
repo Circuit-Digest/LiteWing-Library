@@ -1,6 +1,8 @@
 """
-LiteWing Internal — CRTP Packet Helpers
+LiteWing Internal - CRTP Packet Helpers
 =========================================
+Author: Dharagesh
+
 Low-level helpers that handle CRTP packet construction and transmission.
 Learners should NOT need to touch anything in this file.
 """

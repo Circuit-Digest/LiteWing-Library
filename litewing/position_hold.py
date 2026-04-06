@@ -1,6 +1,8 @@
 """
 LiteWing Position Hold Controller
 ===================================
+Author: Dharagesh
+
 Uses PID control and optical flow to keep the drone at a target position.
 
 The position hold system works like this:

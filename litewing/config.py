@@ -1,6 +1,8 @@
 """
 LiteWing Configuration Defaults
 ================================
+Author: Dharagesh
+
 All tunable constants for the LiteWing drone library.
 Each value has a comment explaining what it does and sensible defaults.
 

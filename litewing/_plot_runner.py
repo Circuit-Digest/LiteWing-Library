@@ -1,6 +1,8 @@
 """
-LiteWing Internal — Plot Runner
+LiteWing Internal - Plot Runner
 =================================
+Author: Dharagesh
+
 Standalone subprocess that receives sensor data via stdin (JSON lines)
 and renders live matplotlib plots.
 
