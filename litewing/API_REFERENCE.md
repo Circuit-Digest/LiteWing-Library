@@ -94,8 +94,8 @@ with LiteWing("192.168.43.42") as drone:
 | Method | Description |
 |---|---|
 | `fly(maneuver_fn=None, hover_duration=None)` | Execute a complete flight: connect → takeoff → hover/maneuver → land. If `maneuver_fn` is provided, it runs during the hover phase. |
-| `fly_to(x, y, speed=0.3, threshold=None)` | Fly to absolute position `(x, y)` using position hold. Blocking. |
-| `fly_path(waypoints, speed=0.3, threshold=None)` | Fly through a list of `(x, y)` waypoint tuples. |
+| `fly_to(x, y, z=None, yaw=None, speed=0.3, threshold=None)` | Fly to absolute position `(x, y, z)` with optional `yaw` rotation. Blocking. |
+| `fly_path(waypoints, speed=0.3, threshold=None)` | Fly through a list of flexible waypoint tuples: `(x, y)`, `(x, y, z)`, or `(x, y, z, yaw)`. |
 
 ### Shape Flight
 

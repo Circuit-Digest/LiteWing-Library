@@ -126,8 +126,8 @@ drone.land()
 
 | Function | What it does | When to use |
 |---|---|---|
-| `drone.fly_to(x, y, speed)` | Fly to absolute position *(blocking)* | Navigate to a specific coordinate |
-| `drone.fly_path(waypoints, speed)` | Fly through a list of `(x, y)` points | Fly a shape or route |
+| `drone.fly_to(x, y, z=None, yaw=None, speed=None, threshold=None)` | Fly to 3D position with optional rotation | Navigate to a specific coordinate/heading |
+| `drone.fly_path(waypoints, speed=None, threshold=None)` | Fly through flexible waypoints: `(x,y)`, `(x,y,z)`, or `(x,y,z,yaw)` | Fly a custom 3D shape or route |
 
 **Coordinate system** (from drone's starting point):
 - `+X` = forward, `-X` = backward
