@@ -86,9 +86,6 @@ litewing-library/
 │       ├── 03_waypoint_navigation.py
 │       ├── 04_keyboard_control.py
 │       └── 05_pattern_navigation.py
-└── tests/                  # Unit tests
-    ├── test_litewing.py
-    └── verify.py
 ```
 
 ## License
